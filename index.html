@@ -314,7 +314,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.8</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.9</div>
 
 <script>
 const USERS = {
@@ -846,8 +846,10 @@ function _cleanupGif(){
   // SuperGif wraps img in a div and adds canvas — nuke everything, rebuild clean
   const area=document.getElementById("gifPlayerArea");
   const controls=area.querySelector(".gif-controls");
+  const drawBar=area.querySelector(".draw-toolbar");
   area.innerHTML='<img id="gifImg" src="">';
-  area.appendChild(controls);
+  if(controls)area.appendChild(controls);
+  if(drawBar)area.appendChild(drawBar);
 }
 
 function toggleGifPause(){
