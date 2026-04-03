@@ -341,8 +341,9 @@ const TASKS=[
 const CAT_LABELS={voronka:"Воронки",fpv:"ФПВ дрон",vrezka:"Врезка",angar:"Ангар",puli:"Пули/Царапины",vzryv:"Взрыв/Сажа",dym:"Дым",other:"Другое"};
 const ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
 const STORAGE_KEY="kh_vfx_tracker";
-const JSONBIN_ID="69cfd549aaba882197c01bcf";
-const JSONBIN_KEY="$2a$10$tqV1kM2iCXaMkmpkF0.O4uUP66/Kf7x5dFpuURQijLUlGj8T4xSF2";
+const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
+const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json","Prefer":"return=minimal"};
 let _saving=false,_pendingSave=false;
 
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
@@ -351,7 +352,6 @@ function saveState(s){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
   const n=document.getElementById("saveNotice");
   n.textContent="Saving...";n.classList.add("show");
-  // Debounced remote save
   if(_saving){_pendingSave=true;return;}
   _saving=true;
   _pushRemote(s).finally(()=>{
@@ -362,15 +362,12 @@ function saveState(s){
 
 async function _pushRemote(s){
   try{
-    const clean={...s};delete clean._v;delete clean._init;delete clean._empty;
-    const data=Object.keys(clean).length?clean:{"_placeholder":true};
-    const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`,{
-      method:"PUT",
-      headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY,"X-Bin-Versioning":"false"},
-      body:JSON.stringify(data)
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main",{
+      method:"PATCH",
+      headers:SUPA_HEADERS,
+      body:JSON.stringify({data:s,updated_at:new Date().toISOString()})
     });
-    const j=await r.json();
-    if(!r.ok){console.error("JSONBin PUT error:",j);throw new Error(j.message||"PUT failed");}
+    if(!r.ok){const t=await r.text();console.error("Supabase PATCH error:",t);throw new Error(t);}
     const n=document.getElementById("saveNotice");
     n.textContent="Saved";n.style.background="#1f6feb";
     setTimeout(()=>n.classList.remove("show"),1200);
@@ -384,23 +381,52 @@ async function _pushRemote(s){
 
 async function _pullRemote(){
   try{
-    const r=await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`,{
-      headers:{"X-Master-Key":JSONBIN_KEY}
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq.main&select=data",{
+      headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}
     });
-    if(!r.ok){console.error("JSONBin GET status:",r.status);return false;}
-    const j=await r.json();
-    if(j.record&&typeof j.record==="object"){
-      const rec=j.record;
-      // Skip if bin is still initial/empty placeholder
-      const keys=Object.keys(rec).filter(k=>!k.startsWith("_"));
-      if(!keys.length) return false;
-      state=rec;
+    if(!r.ok)return false;
+    const rows=await r.json();
+    if(rows.length&&rows[0].data&&Object.keys(rows[0].data).length){
+      state=rows[0].data;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       return true;
     }
   }catch(e){console.error("Pull failed:",e);}
   return false;
 }
+
+// --- Supabase Realtime via WebSocket ---
+function _initRealtime(){
+  const wsUrl=SUPA_URL.replace("https://","wss://")+"/realtime/v1/websocket?apikey="+SUPA_KEY+"&vsn=1.0.0";
+  let ws,heartbeat;
+  function connect(){
+    ws=new WebSocket(wsUrl);
+    ws.onopen=()=>{
+      // Join channel
+      ws.send(JSON.stringify({topic:"realtime:public:tracker_state",event:"phx_join",payload:{config:{broadcast:{self:false},postgres_changes:[{event:"UPDATE",schema:"public",table:"tracker_state",filter:"id=eq.main"}]}},ref:"1"}));
+      // Heartbeat every 30s
+      heartbeat=setInterval(()=>{ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:"hb"}));},30000);
+    };
+    ws.onmessage=(ev)=>{
+      try{
+        const msg=JSON.parse(ev.data);
+        if(msg.event==="postgres_changes"&&msg.payload?.data?.record?.data){
+          const remote=msg.payload.data.record.data;
+          if(JSON.stringify(remote)!==JSON.stringify(state)){
+            state=remote;
+            localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+            runMigrations();render();
+            if(noteTaskId&&noteType==='chat')renderChat();
+          }
+        }
+      }catch(e){}
+    };
+    ws.onclose=()=>{clearInterval(heartbeat);setTimeout(connect,3000);};
+    ws.onerror=()=>{ws.close();};
+  }
+  connect();
+}
+_initRealtime();
 
 let state=loadState();
 
@@ -866,15 +892,14 @@ function exportCSV(){
 }
 render();
 
-// Auto-sync: pull remote every 30s
+// Fallback poll every 15s in case WebSocket drops
 setInterval(async()=>{
   if(_saving)return;
   const pulled=await _pullRemote();
   if(pulled){runMigrations();render();
-    // Re-render chat if open
     if(noteTaskId&&noteType==='chat')renderChat();
   }
-},5000);
+},15000);
 </script>
 </body>
 </html>
