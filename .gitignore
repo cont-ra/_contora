@@ -1,1 +1,2 @@
-gif/*.gif
+gif/
+.DS_Store
