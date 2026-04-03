@@ -12,224 +12,122 @@
     color: #c9d1d9;
     padding: 20px;
   }
-  h1 {
-    color: #f0f6fc;
-    margin-bottom: 6px;
-    font-size: 22px;
-  }
-  .subtitle {
-    color: #8b949e;
-    margin-bottom: 20px;
-    font-size: 14px;
-  }
+  h1 { color: #f0f6fc; margin-bottom: 6px; font-size: 22px; }
+  .subtitle { color: #8b949e; margin-bottom: 20px; font-size: 14px; }
   .header-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 16px; margin-bottom: 6px;
   }
   .user-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 20px;
-    padding: 4px 14px 4px 10px;
-    font-size: 13px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 20px; padding: 4px 14px 4px 10px; font-size: 13px;
   }
-  .user-badge .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
+  .user-badge .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .dot-admin { background: #f85149; }
   .dot-nikita { background: #58a6ff; }
   .dot-igor { background: #3fb950; }
+  .dot-guest { background: #484f58; }
   .user-badge .uname { font-weight: 600; }
   .logout-link {
-    color: #484f58;
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: underline;
-    margin-left: 4px;
+    color: #484f58; font-size: 12px; cursor: pointer;
+    text-decoration: underline; margin-left: 4px;
   }
   .logout-link:hover { color: #8b949e; }
 
   /* Login overlay */
   .login-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
   }
   .login-overlay.hidden { display: none; }
   .login-box {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 32px;
-    width: 340px;
-    text-align: center;
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 12px; padding: 32px; width: 340px; text-align: center;
   }
-  .login-box h2 {
-    color: #f0f6fc;
-    margin-bottom: 8px;
-    font-size: 20px;
-  }
-  .login-box p {
-    color: #8b949e;
-    font-size: 13px;
-    margin-bottom: 20px;
-  }
+  .login-box h2 { color: #f0f6fc; margin-bottom: 8px; font-size: 20px; }
+  .login-box p { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
   .login-box input {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 15px;
-    width: 100%;
-    text-align: center;
-    letter-spacing: 2px;
-    margin-bottom: 14px;
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 10px 14px; border-radius: 8px; font-size: 15px;
+    width: 100%; text-align: center; letter-spacing: 2px; margin-bottom: 14px;
   }
-  .login-box input:focus {
-    outline: none;
-    border-color: #1f6feb;
-  }
+  .login-box input:focus { outline: none; border-color: #1f6feb; }
   .login-box .login-btn {
-    background: #1f6feb;
-    border: none;
-    color: #fff;
-    padding: 10px 0;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    width: 100%;
-    cursor: pointer;
-    margin-bottom: 10px;
+    background: #1f6feb; border: none; color: #fff;
+    padding: 10px 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; width: 100%; cursor: pointer; margin-bottom: 10px;
   }
   .login-box .login-btn:hover { background: #388bfd; }
-  .login-error {
-    color: #f85149;
-    font-size: 13px;
-    min-height: 20px;
+  .login-box .guest-btn {
+    background: transparent; border: 1px solid #30363d; color: #8b949e;
+    padding: 10px 0; border-radius: 8px; font-size: 13px;
+    width: 100%; cursor: pointer; margin-bottom: 10px;
   }
+  .login-box .guest-btn:hover { background: #161b22; color: #c9d1d9; border-color: #484f58; }
+  .login-divider {
+    color: #484f58; font-size: 12px; margin: 6px 0 14px;
+  }
+  .login-error { color: #f85149; font-size: 13px; min-height: 20px; }
 
   .stats {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
+    display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
   }
   .stat-card {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 14px 20px;
-    min-width: 140px;
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 14px 20px; min-width: 140px;
   }
-  .stat-card .num {
-    font-size: 28px;
-    font-weight: 700;
-  }
-  .stat-card .label {
-    font-size: 12px;
-    color: #8b949e;
-    margin-top: 2px;
-  }
+  .stat-card .num { font-size: 28px; font-weight: 700; }
+  .stat-card .label { font-size: 12px; color: #8b949e; margin-top: 2px; }
   .num.red { color: #f85149; }
   .num.yellow { color: #d29922; }
   .num.green { color: #3fb950; }
   .num.blue { color: #58a6ff; }
 
   .filters {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    align-items: center;
+    display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
   }
   .filters input {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 14px;
-    width: 260px;
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 260px;
   }
   .filters input::placeholder { color: #484f58; }
-  .filter-btn {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: 0.15s;
+  .filter-btn, .artist-filter-btn {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; transition: 0.15s;
   }
-  .filter-btn:hover { background: #30363d; }
-  .filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  .filter-btn:hover, .artist-filter-btn:hover { background: #30363d; }
+  .filter-btn.active, .artist-filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  .separator { color: #30363d; font-size: 18px; user-select: none; }
 
   table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #161b22;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #30363d;
+    width: 100%; border-collapse: collapse; background: #161b22;
+    border-radius: 8px; overflow: hidden; border: 1px solid #30363d;
   }
   thead th {
-    background: #21262d;
-    padding: 10px 14px;
-    text-align: left;
-    font-size: 12px;
-    font-weight: 600;
-    color: #8b949e;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #30363d;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
+    background: #21262d; padding: 10px 14px; text-align: left;
+    font-size: 12px; font-weight: 600; color: #8b949e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d; cursor: pointer;
+    user-select: none; white-space: nowrap;
   }
   thead th:hover { color: #c9d1d9; }
-  tbody tr {
-    border-bottom: 1px solid #21262d;
-    transition: 0.1s;
-  }
+  tbody tr { border-bottom: 1px solid #21262d; transition: 0.1s; }
   tbody tr:hover { background: #1c2128; }
-  tbody td {
-    padding: 10px 14px;
-    font-size: 14px;
-    vertical-align: top;
-  }
+  tbody td { padding: 10px 14px; font-size: 14px; vertical-align: top; }
   td.id-cell {
     font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 13px;
-    color: #58a6ff;
-    white-space: nowrap;
+    font-size: 13px; color: #58a6ff; white-space: nowrap;
   }
   td.tc-cell {
     font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 12px;
-    color: #8b949e;
-    white-space: nowrap;
+    font-size: 12px; color: #8b949e; white-space: nowrap;
   }
   td.desc-cell { max-width: 400px; }
   td.category-cell { white-space: nowrap; }
   .cat-tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 600;
   }
   .cat-voronka { background: #3d1f00; color: #d29922; }
   .cat-fpv { background: #1a0030; color: #bc8cff; }
@@ -240,112 +138,133 @@
   .cat-dym { background: #1a1a2e; color: #8b949e; }
   .cat-other { background: #1c1c1c; color: #8b949e; }
 
-  .status-select {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
+  .status-select, .assign-select {
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 4px 8px; border-radius: 6px; font-size: 13px; cursor: pointer;
   }
-  .status-select:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .status-select:disabled, .assign-select:disabled {
+    opacity: 0.4; cursor: not-allowed;
   }
   .status-select.s-todo { border-color: #f85149; color: #f85149; }
   .status-select.s-progress { border-color: #d29922; color: #d29922; }
   .status-select.s-review { border-color: #58a6ff; color: #58a6ff; }
   .status-select.s-done { border-color: #3fb950; color: #3fb950; }
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
-
-  .assign-select {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .assign-select:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
   .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
   .assign-igor { border-color: #3fb950; color: #3fb950; }
 
-  .notes-input {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 13px;
-    width: 100%;
-    min-width: 120px;
+  /* Note buttons */
+  .note-btn {
+    background: #0d1117; border: 1px solid #30363d; color: #8b949e;
+    padding: 4px 10px; border-radius: 6px; font-size: 12px;
+    cursor: pointer; white-space: nowrap; max-width: 140px;
+    overflow: hidden; text-overflow: ellipsis; text-align: left;
+    display: block;
   }
-  .notes-input:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .note-btn:hover { border-color: #484f58; color: #c9d1d9; }
+  .note-btn.has-text { color: #c9d1d9; border-color: #484f58; }
+  .note-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .note-btn.admin-note { border-left: 3px solid #f85149; }
+  .note-btn.artist-note { border-left: 3px solid #58a6ff; }
+
+  /* Note modal */
+  .note-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center; z-index: 2000;
   }
-  .notes-input:focus, .status-select:focus, .assign-select:focus {
-    outline: none;
-    border-color: #1f6feb;
+  .note-modal-overlay.hidden { display: none; }
+  .note-modal {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 12px; padding: 24px; width: 480px; max-width: 90vw;
   }
+  .note-modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .note-modal-header h3 { color: #f0f6fc; font-size: 16px; }
+  .note-modal-close {
+    background: none; border: none; color: #484f58; font-size: 20px;
+    cursor: pointer; padding: 4px 8px; border-radius: 4px;
+  }
+  .note-modal-close:hover { color: #c9d1d9; background: #21262d; }
+  .note-modal-id {
+    font-family: 'SF Mono', monospace; color: #58a6ff;
+    font-size: 13px; margin-bottom: 16px;
+  }
+  .note-modal textarea {
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 12px; border-radius: 8px; font-size: 14px;
+    width: 100%; min-height: 120px; resize: vertical;
+    font-family: inherit; line-height: 1.5;
+  }
+  .note-modal textarea:focus { outline: none; border-color: #1f6feb; }
+  .note-modal textarea:disabled {
+    opacity: 0.5; cursor: not-allowed; resize: none;
+  }
+  .note-modal-label {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .note-modal-label.admin-label { color: #f85149; }
+  .note-modal-label.artist-label { color: #58a6ff; }
+  .note-section { margin-bottom: 16px; }
+  .note-section:last-child { margin-bottom: 0; }
+  .note-modal-save {
+    background: #1f6feb; border: none; color: #fff;
+    padding: 8px 20px; border-radius: 6px; font-size: 13px;
+    font-weight: 600; cursor: pointer; margin-top: 16px; float: right;
+  }
+  .note-modal-save:hover { background: #388bfd; }
+  .note-readonly {
+    background: #0d1117; border: 1px solid #21262d; color: #8b949e;
+    padding: 12px; border-radius: 8px; font-size: 14px;
+    min-height: 50px; line-height: 1.5; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .note-empty { color: #484f58; font-style: italic; }
 
   .save-notice {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: #1f6feb;
-    color: #fff;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
+    position: fixed; bottom: 20px; right: 20px;
+    background: #1f6feb; color: #fff;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
   }
   .save-notice.show { opacity: 1; }
-
   .export-btn {
-    background: #238636;
-    border: 1px solid #2ea043;
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    margin-left: auto;
+    background: #238636; border: 1px solid #2ea043; color: #fff;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; margin-left: auto;
   }
   .export-btn:hover { background: #2ea043; }
-
-  .artist-filter-btn {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: 0.15s;
-  }
-  .artist-filter-btn:hover { background: #30363d; }
-  .artist-filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
-  .separator { color: #30363d; font-size: 18px; user-select: none; }
 </style>
 </head>
 <body>
 
-<!-- Login overlay -->
+<!-- Login -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <h2>KILLHOUSE VFX</h2>
     <p>Enter your password to continue</p>
     <input type="password" id="loginPass" placeholder="Password" autofocus>
     <button class="login-btn" onclick="tryLogin()">Log In</button>
+    <div class="login-divider">or</div>
+    <button class="guest-btn" onclick="guestLogin()">Continue as Guest (view only)</button>
     <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- Note modal -->
+<div class="note-modal-overlay hidden" id="noteOverlay" onclick="if(event.target===this)closeNote()">
+  <div class="note-modal">
+    <div class="note-modal-header">
+      <h3>Notes</h3>
+      <button class="note-modal-close" onclick="closeNote()">&times;</button>
+    </div>
+    <div class="note-modal-id" id="noteModalId"></div>
+    <div id="noteModalBody"></div>
+    <div style="overflow:hidden">
+      <button class="note-modal-save" id="noteModalSave" onclick="saveNote()" style="display:none">Save</button>
+    </div>
   </div>
 </div>
 
@@ -393,17 +312,17 @@
       <th onclick="sortTable(5)">TC Out</th>
       <th onclick="sortTable(6)">Artist</th>
       <th onclick="sortTable(7)">Status</th>
-      <th>Notes</th>
+      <th>Admin Notes</th>
+      <th>Artist Notes</th>
     </tr>
   </thead>
   <tbody id="tbody"></tbody>
 </table>
 
-<div class="save-notice" id="saveNotice">Saved to localStorage</div>
+<div class="save-notice" id="saveNotice">Saved</div>
 
 <script>
 // --- AUTH ---
-// SHA-256 hashed passwords (simple client-side auth for convenience, not security-critical)
 const USERS = {
   admin:  { hash: "1b1c75327a2c21fbed054f58274ad378e0ba624aa3b909e8438cb483e95a5197", display: "Admin",  role: "admin" },
   nikita: { hash: "8be81b94c7fa0b441af35831ad359e03b395df561476c4ba78d4db90d7ebba2a", display: "Nikita", role: "artist" },
@@ -434,6 +353,12 @@ async function tryLogin() {
   }
 }
 
+function guestLogin() {
+  currentUser = { id: "guest", display: "Guest", role: "guest" };
+  sessionStorage.setItem("kh_user", "guest");
+  showLoggedIn();
+}
+
 document.getElementById("loginPass").addEventListener("keydown", e => {
   if (e.key === "Enter") tryLogin();
 });
@@ -456,24 +381,31 @@ function logout() {
   render();
 }
 
-// Auto-login from session
 (async function checkSession() {
   const saved = sessionStorage.getItem("kh_user");
-  if (saved && USERS[saved]) {
+  if (saved === "guest") {
+    guestLogin();
+  } else if (saved && USERS[saved]) {
     currentUser = { id: saved, ...USERS[saved] };
     showLoggedIn();
   }
 })();
 
-function canEdit(taskId) {
-  if (!currentUser) return false;
-  if (currentUser.role === "admin") return true;
-  const assignee = getAssignee(taskId);
-  return assignee === currentUser.id;
-}
+function isAdmin() { return currentUser && currentUser.role === "admin"; }
+function isArtist() { return currentUser && currentUser.role === "artist"; }
+function isGuest() { return !currentUser || currentUser.role === "guest"; }
 
-function canAssign() {
-  return currentUser && currentUser.role === "admin";
+function canEditStatus(taskId) {
+  if (isGuest()) return false;
+  if (isAdmin()) return true;
+  return getAssignee(taskId) === currentUser.id;
+}
+function canAssign() { return isAdmin(); }
+function canEditAdminNote() { return isAdmin(); }
+function canEditArtistNote(taskId) {
+  if (isGuest()) return false;
+  if (isAdmin()) return true;
+  return isArtist() && getAssignee(taskId) === currentUser.id;
 }
 
 // --- DATA ---
@@ -512,14 +444,12 @@ const CAT_LABELS = {
   voronka: "Воронки", fpv: "ФПВ дрон", vrezka: "Врезка", angar: "Ангар",
   puli: "Пули/Царапины", vzryv: "Взрыв/Сажа", dym: "Дым", other: "Другое"
 };
-
 const ARTISTS = [
   { id: "nikita", display: "Nikita" },
   { id: "igor", display: "Igor" },
 ];
 
 const STORAGE_KEY = "kh_vfx_tracker";
-
 function loadState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
   catch { return {}; }
@@ -539,18 +469,115 @@ let sortCol = -1;
 let sortAsc = true;
 
 function getStatus(id) { return (state[id] && state[id].status) || "todo"; }
-function getNotes(id) { return (state[id] && state[id].notes) || ""; }
+function getAdminNote(id) { return (state[id] && state[id].adminNote) || ""; }
+function getArtistNote(id) { return (state[id] && state[id].artistNote) || ""; }
 function getAssignee(id) { return (state[id] && state[id].assignee) || ""; }
 
+// Migrate old "notes" → "adminNote"
+(function migrateNotes() {
+  let changed = false;
+  for (const [id, d] of Object.entries(state)) {
+    if (d.notes && !d.adminNote) {
+      d.adminNote = d.notes;
+      delete d.notes;
+      changed = true;
+    }
+  }
+  if (changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+})();
+
 function updateStats() {
-  let counts = { todo:0, progress:0, review:0, done:0, skip:0 };
-  TASKS.forEach(t => { counts[getStatus(t.id)]++; });
-  document.getElementById("stat-todo").textContent = counts.todo;
-  document.getElementById("stat-progress").textContent = counts.progress;
-  document.getElementById("stat-review").textContent = counts.review;
-  document.getElementById("stat-done").textContent = counts.done;
+  let c = { todo:0, progress:0, review:0, done:0, skip:0 };
+  TASKS.forEach(t => { c[getStatus(t.id)]++; });
+  document.getElementById("stat-todo").textContent = c.todo;
+  document.getElementById("stat-progress").textContent = c.progress;
+  document.getElementById("stat-review").textContent = c.review;
+  document.getElementById("stat-done").textContent = c.done;
 }
 
+// --- NOTE MODAL ---
+let noteModalTaskId = null;
+let noteModalDirty = false;
+
+function openNote(taskId) {
+  noteModalTaskId = taskId;
+  noteModalDirty = false;
+  const task = TASKS.find(t => t.id === taskId);
+  document.getElementById("noteModalId").textContent = taskId + " — " + (task ? task.desc : "");
+
+  const adminText = getAdminNote(taskId);
+  const artistText = getArtistNote(taskId);
+  const canAdmin = canEditAdminNote();
+  const canArtist = canEditArtistNote(taskId);
+  const showSave = canAdmin || canArtist;
+
+  let html = "";
+
+  // Admin notes section
+  html += `<div class="note-section">`;
+  html += `<div class="note-modal-label admin-label">Admin Notes</div>`;
+  if (canAdmin) {
+    html += `<textarea id="noteAdminTA" placeholder="Admin notes...">${esc(adminText)}</textarea>`;
+  } else {
+    html += `<div class="note-readonly">${adminText ? esc(adminText) : '<span class="note-empty">No admin notes</span>'}</div>`;
+  }
+  html += `</div>`;
+
+  // Artist notes section
+  html += `<div class="note-section">`;
+  html += `<div class="note-modal-label artist-label">Artist Notes</div>`;
+  if (canArtist) {
+    html += `<textarea id="noteArtistTA" placeholder="Questions, comments...">${esc(artistText)}</textarea>`;
+  } else {
+    html += `<div class="note-readonly">${artistText ? esc(artistText) : '<span class="note-empty">No artist notes</span>'}</div>`;
+  }
+  html += `</div>`;
+
+  document.getElementById("noteModalBody").innerHTML = html;
+  document.getElementById("noteModalSave").style.display = showSave ? "block" : "none";
+  document.getElementById("noteOverlay").classList.remove("hidden");
+
+  // Focus first editable textarea
+  const ta = document.getElementById("noteAdminTA") || document.getElementById("noteArtistTA");
+  if (ta) setTimeout(() => ta.focus(), 50);
+}
+
+function closeNote() {
+  document.getElementById("noteOverlay").classList.add("hidden");
+  noteModalTaskId = null;
+}
+
+function saveNote() {
+  if (!noteModalTaskId) return;
+  if (!state[noteModalTaskId]) state[noteModalTaskId] = {};
+
+  const adminTA = document.getElementById("noteAdminTA");
+  const artistTA = document.getElementById("noteArtistTA");
+  if (adminTA) state[noteModalTaskId].adminNote = adminTA.value;
+  if (artistTA) state[noteModalTaskId].artistNote = artistTA.value;
+
+  saveState(state);
+  closeNote();
+  render();
+}
+
+// Close on Escape
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !document.getElementById("noteOverlay").classList.contains("hidden")) {
+    closeNote();
+  }
+});
+
+function esc(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function truncate(s, len) {
+  if (!s) return "";
+  return s.length > len ? s.substring(0, len) + "..." : s;
+}
+
+// --- RENDER ---
 function render() {
   const tbody = document.getElementById("tbody");
   let rows = TASKS.map((t, i) => ({
@@ -563,15 +590,10 @@ function render() {
     const q = searchQuery.toLowerCase();
     rows = rows.filter(r => r.id.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q));
   }
-  if (currentFilter !== "all") {
-    rows = rows.filter(r => r.status === currentFilter);
-  }
+  if (currentFilter !== "all") rows = rows.filter(r => r.status === currentFilter);
   if (artistFilter !== "all") {
-    if (artistFilter === "unassigned") {
-      rows = rows.filter(r => !r.assignee);
-    } else {
-      rows = rows.filter(r => r.assignee === artistFilter);
-    }
+    if (artistFilter === "unassigned") rows = rows.filter(r => !r.assignee);
+    else rows = rows.filter(r => r.assignee === artistFilter);
   }
   if (sortCol >= 0) {
     const keys = ["idx","id","desc","cat","tcIn","tcOut","assignee","status"];
@@ -580,22 +602,23 @@ function render() {
       let va = a[k], vb = b[k];
       if (typeof va === "string") va = va.toLowerCase();
       if (typeof vb === "string") vb = vb.toLowerCase();
-      if (va < vb) return sortAsc ? -1 : 1;
-      if (va > vb) return sortAsc ? 1 : -1;
-      return 0;
+      return va < vb ? (sortAsc?-1:1) : va > vb ? (sortAsc?1:-1) : 0;
     });
   }
 
   tbody.innerHTML = rows.map(r => {
     const st = r.status;
-    const stClass = "s-" + (st === "progress" ? "progress" : st);
-    const editable = canEdit(r.id);
-    const isAdmin = canAssign();
+    const stClass = "s-" + st;
+    const editSt = canEditStatus(r.id);
+    const adm = canAssign();
     const assignCls = r.assignee ? " assign-" + r.assignee : "";
-    const disStatus = editable ? "" : "disabled";
-    const disNotes = editable ? "" : "disabled";
-    const disAssign = isAdmin ? "" : "disabled";
-    const notes = getNotes(r.id).replace(/"/g, "&quot;");
+
+    const adminNote = getAdminNote(r.id);
+    const artistNote = getArtistNote(r.id);
+    const adminPreview = truncate(adminNote, 20);
+    const artistPreview = truncate(artistNote, 20);
+    const adminHas = adminNote ? " has-text" : "";
+    const artistHas = artistNote ? " has-text" : "";
 
     const artistOptions = ARTISTS.map(a =>
       `<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`
@@ -609,13 +632,13 @@ function render() {
       <td class="tc-cell">${r.tcIn}</td>
       <td class="tc-cell">${r.tcOut}</td>
       <td>
-        <select class="assign-select${assignCls}" onchange="setAssignee('${r.id}', this.value, this)" ${disAssign}>
+        <select class="assign-select${assignCls}" onchange="setAssignee('${r.id}',this.value,this)" ${adm?"":"disabled"}>
           <option value="" ${!r.assignee?"selected":""}>—</option>
           ${artistOptions}
         </select>
       </td>
       <td>
-        <select class="status-select ${stClass}" onchange="setStatus('${r.id}', this.value, this)" ${disStatus}>
+        <select class="status-select ${stClass}" onchange="setStatus('${r.id}',this.value,this)" ${editSt?"":"disabled"}>
           <option value="todo" ${st==="todo"?"selected":""}>TODO</option>
           <option value="progress" ${st==="progress"?"selected":""}>In Progress</option>
           <option value="review" ${st==="review"?"selected":""}>Review</option>
@@ -623,7 +646,8 @@ function render() {
           <option value="skip" ${st==="skip"?"selected":""}>Skip</option>
         </select>
       </td>
-      <td><input class="notes-input" value="${notes}" onchange="setNotes('${r.id}', this.value)" placeholder="..." ${disNotes}></td>
+      <td><button class="note-btn admin-note${adminHas}" onclick="openNote('${r.id}')">${adminPreview || "..."}</button></td>
+      <td><button class="note-btn artist-note${artistHas}" onclick="openNote('${r.id}')">${artistPreview || "..."}</button></td>
     </tr>`;
   }).join("");
 
@@ -631,11 +655,11 @@ function render() {
 }
 
 function setStatus(id, val, el) {
-  if (!canEdit(id)) return;
+  if (!canEditStatus(id)) return;
   if (!state[id]) state[id] = {};
   state[id].status = val;
   saveState(state);
-  el.className = "status-select s-" + (val === "progress" ? "progress" : val);
+  el.className = "status-select s-" + val;
   updateStats();
 }
 
@@ -644,59 +668,45 @@ function setAssignee(id, val, el) {
   if (!state[id]) state[id] = {};
   state[id].assignee = val;
   saveState(state);
-  el.className = "assign-select" + (val ? " assign-" + val : "");
   render();
 }
 
-function setNotes(id, val) {
-  if (!canEdit(id)) return;
-  if (!state[id]) state[id] = {};
-  state[id].notes = val;
-  saveState(state);
-}
-
 function sortTable(col) {
-  if (sortCol === col) { sortAsc = !sortAsc; }
+  if (sortCol === col) sortAsc = !sortAsc;
   else { sortCol = col; sortAsc = true; }
   render();
 }
 
 document.getElementById("search").addEventListener("input", e => {
-  searchQuery = e.target.value;
-  render();
+  searchQuery = e.target.value; render();
 });
-
 document.querySelectorAll(".filter-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
-    render();
+    currentFilter = btn.dataset.filter; render();
   });
 });
-
 document.querySelectorAll(".artist-filter-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".artist-filter-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    artistFilter = btn.dataset.artist;
-    render();
+    artistFilter = btn.dataset.artist; render();
   });
 });
 
 function exportCSV() {
-  let csv = "ID,Description,Category,TC In,TC Out,Artist,Status,Notes\n";
+  let csv = "ID,Description,Category,TC In,TC Out,Artist,Status,Admin Notes,Artist Notes\n";
   TASKS.forEach(t => {
-    const st = getStatus(t.id);
-    const artist = getAssignee(t.id);
-    const notes = getNotes(t.id).replace(/"/g, '""');
-    csv += `"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${artist}","${st}","${notes}"\n`;
+    const st = getStatus(t.id), artist = getAssignee(t.id);
+    const an = getAdminNote(t.id).replace(/"/g,'""');
+    const ar = getArtistNote(t.id).replace(/"/g,'""');
+    csv += `"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${artist}","${st}","${an}","${ar}"\n`;
   });
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "kh_vfx_tracker.csv";
-  a.click();
+  a.download = "kh_vfx_tracker.csv"; a.click();
 }
 
 render();
