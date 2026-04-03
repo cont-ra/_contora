@@ -209,6 +209,15 @@
     min-height: 200px;
   }
   .note-panel-readonly.empty { color: #484f58; font-style: italic; }
+
+  .note-entry { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #21262d; }
+  .note-entry:last-child { margin-bottom: 0; border-bottom: none; }
+  .note-entry-header { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+  .note-entry-header.by-admin { color: #f85149; }
+  .note-entry-header.by-artist { color: #58a6ff; }
+  .note-entry-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .note-entry-text.from-admin { color: #f85149; }
+  .note-entry-text.from-artist { color: #c9d1d9; }
   .note-panel-footer {
     padding: 16px 24px; border-top: 1px solid #21262d;
     display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
@@ -459,15 +468,27 @@ function saveState(s) {
 }
 let state = loadState();
 
-// Migrate old "notes" → "adminNote"
-(function(){let c=false;for(const[k,d]of Object.entries(state)){if(d.notes&&!d.adminNote){d.adminNote=d.notes;delete d.notes;c=true;}}if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));})();
+// Migrate old formats
+(function(){let c=false;for(const[k,d]of Object.entries(state)){
+  if(d.notes&&!d.adminNote){d.adminNote=d.notes;delete d.notes;c=true;}
+  // Migrate old string artistNote → array artistNotes
+  if(typeof d.artistNote==="string"&&d.artistNote){
+    d.artistNotes=[{author:"artist",text:d.artistNote}];delete d.artistNote;c=true;
+  }
+}if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));})();
 
 let currentFilter="all", artistFilter="all", searchQuery="", sortCol=-1, sortAsc=true;
 
 function getStatus(id) { return state[id]?.status || "todo"; }
 function getAdminNote(id) { return state[id]?.adminNote || ""; }
-function getArtistNote(id) { return state[id]?.artistNote || ""; }
+function getArtistNotes(id) { return state[id]?.artistNotes || []; }
 function getAssignee(id) { return state[id]?.assignee || ""; }
+function artistNotesPreview(id) {
+  const notes = getArtistNotes(id);
+  if (!notes.length) return "";
+  const last = notes[notes.length - 1];
+  return last.text;
+}
 
 function updateStats() {
   let c={todo:0,progress:0,review:0,done:0,skip:0};
@@ -501,18 +522,45 @@ function openNote(taskId, type) {
   document.getElementById("noteShotId").textContent = taskId;
   document.getElementById("noteShotDesc").textContent = task ? "— " + task.desc : "";
 
-  const text = type === "admin" ? getAdminNote(taskId) : getArtistNote(taskId);
-  const canEdit = type === "admin" ? canEditAdminNote() : canEditArtistNote(taskId);
   const body = document.getElementById("notePanelBody");
   const footer = document.getElementById("notePanelFooter");
 
-  if (canEdit) {
-    body.innerHTML = `<textarea id="noteTA" placeholder="Write your note here...">${esc(text)}</textarea>`;
-    footer.classList.remove("hidden");
-    setTimeout(()=>{ const ta=document.getElementById("noteTA"); if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);} },50);
+  if (type === "admin") {
+    const text = getAdminNote(taskId);
+    const canEdit = canEditAdminNote();
+    if (canEdit) {
+      body.innerHTML = `<textarea id="noteTA" placeholder="Write your note here...">${esc(text)}</textarea>`;
+      footer.classList.remove("hidden");
+      setTimeout(()=>{ const ta=document.getElementById("noteTA"); if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);} },50);
+    } else {
+      body.innerHTML = `<div class="note-panel-readonly${text?'':' empty'}">${text ? esc(text) : 'No notes yet'}</div>`;
+      footer.classList.add("hidden");
+    }
   } else {
-    body.innerHTML = `<div class="note-panel-readonly${text?'':' empty'}">${text ? esc(text) : 'No notes yet'}</div>`;
-    footer.classList.add("hidden");
+    // Artist notes — show history + input
+    const notes = getArtistNotes(taskId);
+    const canEdit = canEditArtistNote(taskId);
+    let html = '<div style="flex:1;overflow-y:auto;margin-bottom:12px">';
+    if (notes.length) {
+      notes.forEach(n => {
+        const isAdm = n.author === "admin";
+        html += `<div class="note-entry">`;
+        html += `<div class="note-entry-header ${isAdm?'by-admin':'by-artist'}">${isAdm?'Admin':n.author==='artist'?'Artist':n.author}</div>`;
+        html += `<div class="note-entry-text ${isAdm?'from-admin':'from-artist'}">${esc(n.text)}</div>`;
+        html += `</div>`;
+      });
+    } else {
+      html += '<div class="note-panel-readonly empty">No notes yet</div>';
+    }
+    html += '</div>';
+    if (canEdit) {
+      html += `<textarea id="noteTA" placeholder="Add a note..." style="min-height:80px;flex-shrink:0"></textarea>`;
+      footer.classList.remove("hidden");
+    } else {
+      footer.classList.add("hidden");
+    }
+    body.innerHTML = html;
+    if (canEdit) setTimeout(()=>{const ta=document.getElementById("noteTA");if(ta)ta.focus();},50);
   }
 
   document.getElementById("noteOverlay").classList.remove("hidden");
@@ -528,8 +576,17 @@ function saveNote() {
   const ta = document.getElementById("noteTA");
   if (!ta) return;
   if (!state[noteTaskId]) state[noteTaskId] = {};
-  const key = noteType === "admin" ? "adminNote" : "artistNote";
-  state[noteTaskId][key] = ta.value;
+  if (noteType === "admin") {
+    state[noteTaskId].adminNote = ta.value;
+  } else {
+    // Artist notes — append new entry (don't save empty)
+    const text = ta.value.trim();
+    if (text) {
+      if (!state[noteTaskId].artistNotes) state[noteTaskId].artistNotes = [];
+      const author = isAdmin() ? "admin" : "artist";
+      state[noteTaskId].artistNotes.push({ author, text });
+    }
+  }
   saveState(state);
   closeNote();
   render();
@@ -563,7 +620,7 @@ function render() {
     const st=r.status, stClass="s-"+st;
     const editSt=canEditStatus(r.id), adm=canAssign();
     const assignCls=r.assignee?" assign-"+r.assignee:"";
-    const an=getAdminNote(r.id), arn=getArtistNote(r.id);
+    const an=getAdminNote(r.id), arn=artistNotesPreview(r.id);
     const anPrev=trunc(an,24), arnPrev=trunc(arn,24);
 
     const artistOpts = ARTISTS.map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
@@ -619,8 +676,9 @@ function exportCSV() {
   let csv="ID,Description,Category,TC In,TC Out,Artist,Status,Admin Notes,Artist Notes\n";
   TASKS.forEach(t=>{
     const st=getStatus(t.id),ar=getAssignee(t.id);
-    const an=getAdminNote(t.id).replace(/"/g,'""'),arn=getArtistNote(t.id).replace(/"/g,'""');
-    csv+=`"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${ar}","${st}","${an}","${arn}"\n`;
+    const an=getAdminNote(t.id).replace(/"/g,'""');
+    const arnArr=getArtistNotes(t.id).map(n=>`[${n.author}] ${n.text}`).join("\n").replace(/"/g,'""');
+    csv+=`"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${ar}","${st}","${an}","${arnArr}"\n`;
   });
   const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
