@@ -22,6 +22,104 @@
     margin-bottom: 20px;
     font-size: 14px;
   }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 6px;
+  }
+  .user-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    padding: 4px 14px 4px 10px;
+    font-size: 13px;
+  }
+  .user-badge .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-admin { background: #f85149; }
+  .dot-nikita { background: #58a6ff; }
+  .dot-igor { background: #3fb950; }
+  .user-badge .uname { font-weight: 600; }
+  .logout-link {
+    color: #484f58;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: 4px;
+  }
+  .logout-link:hover { color: #8b949e; }
+
+  /* Login overlay */
+  .login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .login-overlay.hidden { display: none; }
+  .login-box {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 32px;
+    width: 340px;
+    text-align: center;
+  }
+  .login-box h2 {
+    color: #f0f6fc;
+    margin-bottom: 8px;
+    font-size: 20px;
+  }
+  .login-box p {
+    color: #8b949e;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .login-box input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    width: 100%;
+    text-align: center;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+  }
+  .login-box input:focus {
+    outline: none;
+    border-color: #1f6feb;
+  }
+  .login-box .login-btn {
+    background: #1f6feb;
+    border: none;
+    color: #fff;
+    padding: 10px 0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 100%;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .login-box .login-btn:hover { background: #388bfd; }
+  .login-error {
+    color: #f85149;
+    font-size: 13px;
+    min-height: 20px;
+  }
+
   .stats {
     display: flex;
     gap: 16px;
@@ -125,9 +223,7 @@
     white-space: nowrap;
   }
   td.desc-cell { max-width: 400px; }
-  td.category-cell {
-    white-space: nowrap;
-  }
+  td.category-cell { white-space: nowrap; }
   .cat-tag {
     display: inline-block;
     padding: 2px 8px;
@@ -153,11 +249,31 @@
     font-size: 13px;
     cursor: pointer;
   }
+  .status-select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
   .status-select.s-todo { border-color: #f85149; color: #f85149; }
   .status-select.s-progress { border-color: #d29922; color: #d29922; }
   .status-select.s-review { border-color: #58a6ff; color: #58a6ff; }
   .status-select.s-done { border-color: #3fb950; color: #3fb950; }
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
+
+  .assign-select {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .assign-select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
+  .assign-igor { border-color: #3fb950; color: #3fb950; }
 
   .notes-input {
     background: #0d1117;
@@ -169,7 +285,11 @@
     width: 100%;
     min-width: 120px;
   }
-  .notes-input:focus, .status-select:focus {
+  .notes-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .notes-input:focus, .status-select:focus, .assign-select:focus {
     outline: none;
     border-color: #1f6feb;
   }
@@ -200,11 +320,43 @@
     margin-left: auto;
   }
   .export-btn:hover { background: #2ea043; }
+
+  .artist-filter-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.15s;
+  }
+  .artist-filter-btn:hover { background: #30363d; }
+  .artist-filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  .separator { color: #30363d; font-size: 18px; user-select: none; }
 </style>
 </head>
 <body>
 
-<h1>KILLHOUSE VFX Tracker</h1>
+<!-- Login overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>KILLHOUSE VFX</h2>
+    <p>Enter your password to continue</p>
+    <input type="password" id="loginPass" placeholder="Password" autofocus>
+    <button class="login-btn" onclick="tryLogin()">Log In</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="header-row">
+  <h1>KILLHOUSE VFX Tracker</h1>
+  <div class="user-badge" id="userBadge" style="display:none">
+    <span class="dot" id="userDot"></span>
+    <span class="uname" id="userName"></span>
+    <span class="logout-link" onclick="logout()">logout</span>
+  </div>
+</div>
 <p class="subtitle">Declined tasks (Coffeepost) — 28 shots to review</p>
 
 <div class="stats">
@@ -222,6 +374,11 @@
   <button class="filter-btn" data-filter="review">Review</button>
   <button class="filter-btn" data-filter="done">Done</button>
   <button class="filter-btn" data-filter="skip">Skip</button>
+  <span class="separator">|</span>
+  <button class="artist-filter-btn active" data-artist="all">All Artists</button>
+  <button class="artist-filter-btn" data-artist="nikita">Nikita</button>
+  <button class="artist-filter-btn" data-artist="igor">Igor</button>
+  <button class="artist-filter-btn" data-artist="unassigned">Unassigned</button>
   <button class="export-btn" onclick="exportCSV()">Export CSV</button>
 </div>
 
@@ -234,7 +391,8 @@
       <th onclick="sortTable(3)">Category</th>
       <th onclick="sortTable(4)">TC In</th>
       <th onclick="sortTable(5)">TC Out</th>
-      <th onclick="sortTable(6)">Status</th>
+      <th onclick="sortTable(6)">Artist</th>
+      <th onclick="sortTable(7)">Status</th>
       <th>Notes</th>
     </tr>
   </thead>
@@ -244,6 +402,81 @@
 <div class="save-notice" id="saveNotice">Saved to localStorage</div>
 
 <script>
+// --- AUTH ---
+// SHA-256 hashed passwords (simple client-side auth for convenience, not security-critical)
+const USERS = {
+  admin:  { hash: "1b1c75327a2c21fbed054f58274ad378e0ba624aa3b909e8438cb483e95a5197", display: "Admin",  role: "admin" },
+  nikita: { hash: "8be81b94c7fa0b441af35831ad359e03b395df561476c4ba78d4db90d7ebba2a", display: "Nikita", role: "artist" },
+  igor:   { hash: "b83df2f5f0e323e50fa5cd9b034d81a3481d88c953acf04a6ff5a97f03036e9b", display: "Igor",   role: "artist" },
+};
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+let currentUser = null;
+
+async function tryLogin() {
+  const pass = document.getElementById("loginPass").value.trim();
+  if (!pass) return;
+  const h = await sha256(pass);
+  let found = null;
+  for (const [id, u] of Object.entries(USERS)) {
+    if (u.hash === h) { found = { id, ...u }; break; }
+  }
+  if (found) {
+    currentUser = found;
+    sessionStorage.setItem("kh_user", found.id);
+    showLoggedIn();
+  } else {
+    document.getElementById("loginError").textContent = "Wrong password";
+  }
+}
+
+document.getElementById("loginPass").addEventListener("keydown", e => {
+  if (e.key === "Enter") tryLogin();
+});
+
+function showLoggedIn() {
+  document.getElementById("loginOverlay").classList.add("hidden");
+  document.getElementById("userBadge").style.display = "inline-flex";
+  document.getElementById("userName").textContent = currentUser.display;
+  document.getElementById("userDot").className = "dot dot-" + currentUser.id;
+  render();
+}
+
+function logout() {
+  sessionStorage.removeItem("kh_user");
+  currentUser = null;
+  document.getElementById("loginOverlay").classList.remove("hidden");
+  document.getElementById("userBadge").style.display = "none";
+  document.getElementById("loginPass").value = "";
+  document.getElementById("loginError").textContent = "";
+  render();
+}
+
+// Auto-login from session
+(async function checkSession() {
+  const saved = sessionStorage.getItem("kh_user");
+  if (saved && USERS[saved]) {
+    currentUser = { id: saved, ...USERS[saved] };
+    showLoggedIn();
+  }
+})();
+
+function canEdit(taskId) {
+  if (!currentUser) return false;
+  if (currentUser.role === "admin") return true;
+  const assignee = getAssignee(taskId);
+  return assignee === currentUser.id;
+}
+
+function canAssign() {
+  return currentUser && currentUser.role === "admin";
+}
+
+// --- DATA ---
 const TASKS = [
   { id:"KH_01_198", desc:"Добавить воронку", cat:"voronka", tcIn:"0:37:47:19", tcOut:"0:37:50:14" },
   { id:"KH_01_199", desc:"Добавить воронку", cat:"voronka", tcIn:"0:37:57:15", tcOut:"0:37:58:17" },
@@ -276,26 +509,23 @@ const TASKS = [
 ];
 
 const CAT_LABELS = {
-  voronka: "Воронки",
-  fpv: "ФПВ дрон",
-  vrezka: "Врезка",
-  angar: "Ангар",
-  puli: "Пули/Царапины",
-  vzryv: "Взрыв/Сажа",
-  dym: "Дым",
-  other: "Другое"
+  voronka: "Воронки", fpv: "ФПВ дрон", vrezka: "Врезка", angar: "Ангар",
+  puli: "Пули/Царапины", vzryv: "Взрыв/Сажа", dym: "Дым", other: "Другое"
 };
+
+const ARTISTS = [
+  { id: "nikita", display: "Nikita" },
+  { id: "igor", display: "Igor" },
+];
 
 const STORAGE_KEY = "kh_vfx_tracker";
 
 function loadState() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
 }
-
-function saveState(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function saveState(st) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
   const n = document.getElementById("saveNotice");
   n.classList.add("show");
   setTimeout(() => n.classList.remove("show"), 1200);
@@ -303,12 +533,14 @@ function saveState(state) {
 
 let state = loadState();
 let currentFilter = "all";
+let artistFilter = "all";
 let searchQuery = "";
 let sortCol = -1;
 let sortAsc = true;
 
 function getStatus(id) { return (state[id] && state[id].status) || "todo"; }
 function getNotes(id) { return (state[id] && state[id].notes) || ""; }
+function getAssignee(id) { return (state[id] && state[id].assignee) || ""; }
 
 function updateStats() {
   let counts = { todo:0, progress:0, review:0, done:0, skip:0 };
@@ -321,7 +553,11 @@ function updateStats() {
 
 function render() {
   const tbody = document.getElementById("tbody");
-  let rows = TASKS.map((t, i) => ({ ...t, idx: i + 1, status: getStatus(t.id) }));
+  let rows = TASKS.map((t, i) => ({
+    ...t, idx: i + 1,
+    status: getStatus(t.id),
+    assignee: getAssignee(t.id)
+  }));
 
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -330,8 +566,15 @@ function render() {
   if (currentFilter !== "all") {
     rows = rows.filter(r => r.status === currentFilter);
   }
+  if (artistFilter !== "all") {
+    if (artistFilter === "unassigned") {
+      rows = rows.filter(r => !r.assignee);
+    } else {
+      rows = rows.filter(r => r.assignee === artistFilter);
+    }
+  }
   if (sortCol >= 0) {
-    const keys = ["idx","id","desc","cat","tcIn","tcOut","status"];
+    const keys = ["idx","id","desc","cat","tcIn","tcOut","assignee","status"];
     const k = keys[sortCol];
     rows.sort((a, b) => {
       let va = a[k], vb = b[k];
@@ -345,8 +588,19 @@ function render() {
 
   tbody.innerHTML = rows.map(r => {
     const st = r.status;
-    const stClass = st === "todo" ? "s-todo" : st === "progress" ? "s-progress" : st === "review" ? "s-review" : st === "done" ? "s-done" : "s-skip";
+    const stClass = "s-" + (st === "progress" ? "progress" : st);
+    const editable = canEdit(r.id);
+    const isAdmin = canAssign();
+    const assignCls = r.assignee ? " assign-" + r.assignee : "";
+    const disStatus = editable ? "" : "disabled";
+    const disNotes = editable ? "" : "disabled";
+    const disAssign = isAdmin ? "" : "disabled";
     const notes = getNotes(r.id).replace(/"/g, "&quot;");
+
+    const artistOptions = ARTISTS.map(a =>
+      `<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`
+    ).join("");
+
     return `<tr>
       <td style="color:#484f58">${r.idx}</td>
       <td class="id-cell">${r.id}</td>
@@ -355,7 +609,13 @@ function render() {
       <td class="tc-cell">${r.tcIn}</td>
       <td class="tc-cell">${r.tcOut}</td>
       <td>
-        <select class="status-select ${stClass}" onchange="setStatus('${r.id}', this.value, this)">
+        <select class="assign-select${assignCls}" onchange="setAssignee('${r.id}', this.value, this)" ${disAssign}>
+          <option value="" ${!r.assignee?"selected":""}>—</option>
+          ${artistOptions}
+        </select>
+      </td>
+      <td>
+        <select class="status-select ${stClass}" onchange="setStatus('${r.id}', this.value, this)" ${disStatus}>
           <option value="todo" ${st==="todo"?"selected":""}>TODO</option>
           <option value="progress" ${st==="progress"?"selected":""}>In Progress</option>
           <option value="review" ${st==="review"?"selected":""}>Review</option>
@@ -363,7 +623,7 @@ function render() {
           <option value="skip" ${st==="skip"?"selected":""}>Skip</option>
         </select>
       </td>
-      <td><input class="notes-input" value="${notes}" onchange="setNotes('${r.id}', this.value)" placeholder="..."></td>
+      <td><input class="notes-input" value="${notes}" onchange="setNotes('${r.id}', this.value)" placeholder="..." ${disNotes}></td>
     </tr>`;
   }).join("");
 
@@ -371,6 +631,7 @@ function render() {
 }
 
 function setStatus(id, val, el) {
+  if (!canEdit(id)) return;
   if (!state[id]) state[id] = {};
   state[id].status = val;
   saveState(state);
@@ -378,7 +639,17 @@ function setStatus(id, val, el) {
   updateStats();
 }
 
+function setAssignee(id, val, el) {
+  if (!canAssign()) return;
+  if (!state[id]) state[id] = {};
+  state[id].assignee = val;
+  saveState(state);
+  el.className = "assign-select" + (val ? " assign-" + val : "");
+  render();
+}
+
 function setNotes(id, val) {
+  if (!canEdit(id)) return;
   if (!state[id]) state[id] = {};
   state[id].notes = val;
   saveState(state);
@@ -404,12 +675,22 @@ document.querySelectorAll(".filter-btn").forEach(btn => {
   });
 });
 
+document.querySelectorAll(".artist-filter-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".artist-filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    artistFilter = btn.dataset.artist;
+    render();
+  });
+});
+
 function exportCSV() {
-  let csv = "ID,Description,Category,TC In,TC Out,Status,Notes\n";
+  let csv = "ID,Description,Category,TC In,TC Out,Artist,Status,Notes\n";
   TASKS.forEach(t => {
     const st = getStatus(t.id);
+    const artist = getAssignee(t.id);
     const notes = getNotes(t.id).replace(/"/g, '""');
-    csv += `"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${st}","${notes}"\n`;
+    csv += `"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${artist}","${st}","${notes}"\n`;
   });
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
