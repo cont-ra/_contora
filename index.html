@@ -776,17 +776,13 @@ function closeGif(){
 
 function _cleanupGif(){
   if(_gifUpdater){clearInterval(_gifUpdater);_gifUpdater=null;}
-  if(_sgif){
-    try{_sgif.pause();}catch(e){}
-    // Remove SuperGif's generated elements
-    const area=document.getElementById("gifPlayerArea");
-    const divs=area.querySelectorAll("div.jsgif");
-    divs.forEach(d=>d.remove());
-    _sgif=null;
-  }
+  if(_sgif){try{_sgif.pause();}catch(e){}_sgif=null;}
   _gifPaused=false;
-  const img=document.getElementById("gifImg");
-  img.src="";
+  // SuperGif wraps img in a div and adds canvas — nuke everything, rebuild clean
+  const area=document.getElementById("gifPlayerArea");
+  const controls=area.querySelector(".gif-controls");
+  area.innerHTML='<img id="gifImg" src="">';
+  area.appendChild(controls);
 }
 
 function toggleGifPause(){
