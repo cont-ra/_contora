@@ -60,8 +60,8 @@
   td.desc-cell { max-width: 400px; word-break: break-word; white-space: normal; }
   td.desc-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
-  .desc-edit-input { background: #0d1117; border: 1px solid #1f6feb; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 14px; width: 100%; font-family: inherit; }
-  .desc-edit-input:focus { outline: none; }
+  .desc-edit-ta { background: transparent; border: none; color: #c9d1d9; padding: 0; font-size: 14px; width: 100%; font-family: inherit; line-height: 1.5; resize: none; overflow: hidden; outline: 1px solid #1f6feb; outline-offset: 4px; border-radius: 4px; }
+  .desc-edit-ta:focus { outline: 1px solid #1f6feb; outline-offset: 4px; }
   td.category-cell { white-space: nowrap; }
   .cat-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
   .cat-voronka { background: #3d1f00; color: #d29922; } .cat-fpv { background: #1a0030; color: #bc8cff; }
@@ -653,14 +653,24 @@ function startEditDesc(tid,td,ev){
   if(!canEditDesc())return;
   ev.stopPropagation();
   const current=getDesc(tid,TASKS.find(t=>t.id===tid)?.desc||'');
-  td.innerHTML=`<input class="desc-edit-input" value="${esc(current)}" onblur="saveDesc('${tid}',this)" onkeydown="if(event.key==='Enter'){this.blur();}if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}" autofocus>`;
+  td.innerHTML=`<textarea class="desc-edit-ta" rows="1">${esc(current)}</textarea>`;
   td.onclick=null;
-  const inp=td.querySelector('input');
-  if(inp){inp.focus();inp.select();}
+  const ta=td.querySelector('textarea');
+  if(ta){
+    // Auto-size to content
+    ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';
+    ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
+    ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';});
+    ta.addEventListener('blur',()=>saveDesc(tid,ta));
+    ta.addEventListener('keydown',e=>{
+      if(e.key==='Escape'){ta.dataset.cancel='1';ta.blur();}
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ta.blur();}
+    });
+  }
 }
-function saveDesc(tid,inp){
-  if(inp.dataset.cancel==='1'){render();return;}
-  const val=inp.value.trim();
+function saveDesc(tid,ta){
+  if(ta.dataset.cancel==='1'){render();return;}
+  const val=ta.value.trim();
   if(!val){render();return;}
   if(!state[tid])state[tid]={};
   state[tid].desc=val;
