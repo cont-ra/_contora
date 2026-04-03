@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KILLHOUSE VFX Tracker — Declined Tasks</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 20px;
+  }
+  h1 {
+    color: #f0f6fc;
+    margin-bottom: 6px;
+    font-size: 22px;
+  }
+  .subtitle {
+    color: #8b949e;
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 14px 20px;
+    min-width: 140px;
+  }
+  .stat-card .num {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: #8b949e;
+    margin-top: 2px;
+  }
+  .num.red { color: #f85149; }
+  .num.yellow { color: #d29922; }
+  .num.green { color: #3fb950; }
+  .num.blue { color: #58a6ff; }
+
+  .filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filters input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 260px;
+  }
+  .filters input::placeholder { color: #484f58; }
+  .filter-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.15s;
+  }
+  .filter-btn:hover { background: #30363d; }
+  .filter-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #161b22;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #30363d;
+  }
+  thead th {
+    background: #21262d;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: #c9d1d9; }
+  tbody tr {
+    border-bottom: 1px solid #21262d;
+    transition: 0.1s;
+  }
+  tbody tr:hover { background: #1c2128; }
+  tbody td {
+    padding: 10px 14px;
+    font-size: 14px;
+    vertical-align: top;
+  }
+  td.id-cell {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    color: #58a6ff;
+    white-space: nowrap;
+  }
+  td.tc-cell {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: #8b949e;
+    white-space: nowrap;
+  }
+  td.desc-cell { max-width: 400px; }
+  td.category-cell {
+    white-space: nowrap;
+  }
+  .cat-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .cat-voronka { background: #3d1f00; color: #d29922; }
+  .cat-fpv { background: #1a0030; color: #bc8cff; }
+  .cat-vrezka { background: #00261c; color: #3fb950; }
+  .cat-angar { background: #30160a; color: #f0883e; }
+  .cat-puli { background: #300018; color: #f778ba; }
+  .cat-vzryv { background: #2a0000; color: #f85149; }
+  .cat-dym { background: #1a1a2e; color: #8b949e; }
+  .cat-other { background: #1c1c1c; color: #8b949e; }
+
+  .status-select {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .status-select.s-todo { border-color: #f85149; color: #f85149; }
+  .status-select.s-progress { border-color: #d29922; color: #d29922; }
+  .status-select.s-review { border-color: #58a6ff; color: #58a6ff; }
+  .status-select.s-done { border-color: #3fb950; color: #3fb950; }
+  .status-select.s-skip { border-color: #484f58; color: #484f58; }
+
+  .notes-input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 100%;
+    min-width: 120px;
+  }
+  .notes-input:focus, .status-select:focus {
+    outline: none;
+    border-color: #1f6feb;
+  }
+
+  .save-notice {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #1f6feb;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .save-notice.show { opacity: 1; }
+
+  .export-btn {
+    background: #238636;
+    border: 1px solid #2ea043;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: auto;
+  }
+  .export-btn:hover { background: #2ea043; }
+</style>
+</head>
+<body>
+
+<h1>KILLHOUSE VFX Tracker</h1>
+<p class="subtitle">Declined tasks (Coffeepost) — 28 shots to review</p>
+
+<div class="stats">
+  <div class="stat-card"><div class="num red" id="stat-todo">0</div><div class="label">TODO</div></div>
+  <div class="stat-card"><div class="num yellow" id="stat-progress">0</div><div class="label">IN PROGRESS</div></div>
+  <div class="stat-card"><div class="num blue" id="stat-review">0</div><div class="label">REVIEW</div></div>
+  <div class="stat-card"><div class="num green" id="stat-done">0</div><div class="label">DONE</div></div>
+</div>
+
+<div class="filters">
+  <input type="text" id="search" placeholder="Search by ID or description...">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="todo">TODO</button>
+  <button class="filter-btn" data-filter="progress">In Progress</button>
+  <button class="filter-btn" data-filter="review">Review</button>
+  <button class="filter-btn" data-filter="done">Done</button>
+  <button class="filter-btn" data-filter="skip">Skip</button>
+  <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th onclick="sortTable(0)">#</th>
+      <th onclick="sortTable(1)">ID</th>
+      <th onclick="sortTable(2)">Description</th>
+      <th onclick="sortTable(3)">Category</th>
+      <th onclick="sortTable(4)">TC In</th>
+      <th onclick="sortTable(5)">TC Out</th>
+      <th onclick="sortTable(6)">Status</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<div class="save-notice" id="saveNotice">Saved to localStorage</div>
+
+<script>
+const TASKS = [
+  { id:"KH_01_198", desc:"Добавить воронку", cat:"voronka", tcIn:"0:37:47:19", tcOut:"0:37:50:14" },
+  { id:"KH_01_199", desc:"Добавить воронку", cat:"voronka", tcIn:"0:37:57:15", tcOut:"0:37:58:17" },
+  { id:"KH_01_201", desc:"Добавить воронку", cat:"voronka", tcIn:"0:38:13:01", tcOut:"0:38:16:02" },
+  { id:"KH_01_204", desc:"Добавить воронку", cat:"voronka", tcIn:"0:39:10:14", tcOut:"0:39:11:14" },
+  { id:"KH_01_209", desc:"Воронка от снаряда", cat:"voronka", tcIn:"0:40:53:20", tcOut:"0:40:54:08" },
+  { id:"KH_01_220", desc:"Врезка пролета ФПВ дрона", cat:"fpv", tcIn:"0:45:58:03", tcOut:"0:45:59:08" },
+  { id:"KH_01_221", desc:"Врезка пролета ФПВ", cat:"fpv", tcIn:"0:46:03:19", tcOut:"0:46:04:21" },
+  { id:"KH_01_225", desc:"Эффект камеры ФПВ дрона и два выстрела", cat:"fpv", tcIn:"0:46:16:00", tcOut:"0:46:17:01" },
+  { id:"KH_01_227", desc:"Дым добавить и точки от прилетов", cat:"dym", tcIn:"0:47:10:14", tcOut:"0:47:11:22" },
+  { id:"KH_01_228", desc:"Воронки от прилетов и дым...", cat:"voronka", tcIn:"0:47:18:03", tcOut:"0:47:19:01" },
+  { id:"KH_01_253", desc:"Воронки от снарядов", cat:"voronka", tcIn:"0:54:50:05", tcOut:"0:54:54:01" },
+  { id:"KH_01_254", desc:"Врезка ангара слева", cat:"angar", tcIn:"0:57:35:09", tcOut:"0:58:16:01" },
+  { id:"KH_01_321", desc:"Царапины от пуль на лобовом стекле", cat:"puli", tcIn:"1:14:52:01", tcOut:"1:14:54:06" },
+  { id:"KH_01_322", desc:"Царапины от пуль на лобовом стекле", cat:"puli", tcIn:"1:14:56:14", tcOut:"1:14:59:12" },
+  { id:"KH_01_323", desc:"Царапины от пуль на лобовом стекле", cat:"puli", tcIn:"1:15:05:21", tcOut:"1:15:12:15" },
+  { id:"KH_01_323_1", desc:"Царапины от пуль на лобовом стекле", cat:"puli", tcIn:"1:15:44:15", tcOut:"1:15:46:22" },
+  { id:"KH_01_324", desc:"Пролет точки — ФПВ дрона", cat:"fpv", tcIn:"1:15:46:23", tcOut:"1:15:49:09" },
+  { id:"KH_01_325", desc:"ФПВ дрон камера, металические усики", cat:"fpv", tcIn:"1:15:49:10", tcOut:"1:15:51:11" },
+  { id:"KH_01_326", desc:"ФПВ дрон камера, металические усики", cat:"fpv", tcIn:"1:15:56:03", tcOut:"1:15:59:14" },
+  { id:"KH_01_327", desc:"Точка ФПВ дрона", cat:"fpv", tcIn:"1:15:59:15", tcOut:"1:16:03:14" },
+  { id:"KH_01_328", desc:"ФПВ несется на дар, камера ФПВ", cat:"fpv", tcIn:"—", tcOut:"—" },
+  { id:"KH_01_329", desc:"Дорисовываем ФПВ в слоу мо", cat:"fpv", tcIn:"1:16:05:23", tcOut:"1:16:06:17" },
+  { id:"KH_01_330", desc:"Камера дрона", cat:"fpv", tcIn:"1:16:06:18", tcOut:"1:16:07:18" },
+  { id:"KH_01_331", desc:"Добавить на первый сажи от взрыва", cat:"vzryv", tcIn:"1:16:15:12", tcOut:"1:16:24:02" },
+  { id:"KH_01_333", desc:"Добавляем Ангар", cat:"angar", tcIn:"1:19:21:21", tcOut:"1:19:27:00" },
+  { id:"KH_01_334", desc:"Добавляем Ангар", cat:"angar", tcIn:"1:19:27:01", tcOut:"1:19:30:15" },
+  { id:"KH_01_335", desc:"Добавляем Ангар", cat:"angar", tcIn:"1:19:32:04", tcOut:"1:19:35:08" },
+  { id:"KH_01_336", desc:"Добавляем Ангар", cat:"angar", tcIn:"1:20:04:08", tcOut:"1:20:06:01" },
+];
+
+const CAT_LABELS = {
+  voronka: "Воронки",
+  fpv: "ФПВ дрон",
+  vrezka: "Врезка",
+  angar: "Ангар",
+  puli: "Пули/Царапины",
+  vzryv: "Взрыв/Сажа",
+  dym: "Дым",
+  other: "Другое"
+};
+
+const STORAGE_KEY = "kh_vfx_tracker";
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch { return {}; }
+}
+
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const n = document.getElementById("saveNotice");
+  n.classList.add("show");
+  setTimeout(() => n.classList.remove("show"), 1200);
+}
+
+let state = loadState();
+let currentFilter = "all";
+let searchQuery = "";
+let sortCol = -1;
+let sortAsc = true;
+
+function getStatus(id) { return (state[id] && state[id].status) || "todo"; }
+function getNotes(id) { return (state[id] && state[id].notes) || ""; }
+
+function updateStats() {
+  let counts = { todo:0, progress:0, review:0, done:0, skip:0 };
+  TASKS.forEach(t => { counts[getStatus(t.id)]++; });
+  document.getElementById("stat-todo").textContent = counts.todo;
+  document.getElementById("stat-progress").textContent = counts.progress;
+  document.getElementById("stat-review").textContent = counts.review;
+  document.getElementById("stat-done").textContent = counts.done;
+}
+
+function render() {
+  const tbody = document.getElementById("tbody");
+  let rows = TASKS.map((t, i) => ({ ...t, idx: i + 1, status: getStatus(t.id) }));
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    rows = rows.filter(r => r.id.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q));
+  }
+  if (currentFilter !== "all") {
+    rows = rows.filter(r => r.status === currentFilter);
+  }
+  if (sortCol >= 0) {
+    const keys = ["idx","id","desc","cat","tcIn","tcOut","status"];
+    const k = keys[sortCol];
+    rows.sort((a, b) => {
+      let va = a[k], vb = b[k];
+      if (typeof va === "string") va = va.toLowerCase();
+      if (typeof vb === "string") vb = vb.toLowerCase();
+      if (va < vb) return sortAsc ? -1 : 1;
+      if (va > vb) return sortAsc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const st = r.status;
+    const stClass = st === "todo" ? "s-todo" : st === "progress" ? "s-progress" : st === "review" ? "s-review" : st === "done" ? "s-done" : "s-skip";
+    const notes = getNotes(r.id).replace(/"/g, "&quot;");
+    return `<tr>
+      <td style="color:#484f58">${r.idx}</td>
+      <td class="id-cell">${r.id}</td>
+      <td class="desc-cell">${r.desc}</td>
+      <td class="category-cell"><span class="cat-tag cat-${r.cat}">${CAT_LABELS[r.cat]}</span></td>
+      <td class="tc-cell">${r.tcIn}</td>
+      <td class="tc-cell">${r.tcOut}</td>
+      <td>
+        <select class="status-select ${stClass}" onchange="setStatus('${r.id}', this.value, this)">
+          <option value="todo" ${st==="todo"?"selected":""}>TODO</option>
+          <option value="progress" ${st==="progress"?"selected":""}>In Progress</option>
+          <option value="review" ${st==="review"?"selected":""}>Review</option>
+          <option value="done" ${st==="done"?"selected":""}>Done</option>
+          <option value="skip" ${st==="skip"?"selected":""}>Skip</option>
+        </select>
+      </td>
+      <td><input class="notes-input" value="${notes}" onchange="setNotes('${r.id}', this.value)" placeholder="..."></td>
+    </tr>`;
+  }).join("");
+
+  updateStats();
+}
+
+function setStatus(id, val, el) {
+  if (!state[id]) state[id] = {};
+  state[id].status = val;
+  saveState(state);
+  el.className = "status-select s-" + (val === "progress" ? "progress" : val);
+  updateStats();
+}
+
+function setNotes(id, val) {
+  if (!state[id]) state[id] = {};
+  state[id].notes = val;
+  saveState(state);
+}
+
+function sortTable(col) {
+  if (sortCol === col) { sortAsc = !sortAsc; }
+  else { sortCol = col; sortAsc = true; }
+  render();
+}
+
+document.getElementById("search").addEventListener("input", e => {
+  searchQuery = e.target.value;
+  render();
+});
+
+document.querySelectorAll(".filter-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.filter;
+    render();
+  });
+});
+
+function exportCSV() {
+  let csv = "ID,Description,Category,TC In,TC Out,Status,Notes\n";
+  TASKS.forEach(t => {
+    const st = getStatus(t.id);
+    const notes = getNotes(t.id).replace(/"/g, '""');
+    csv += `"${t.id}","${t.desc}","${CAT_LABELS[t.cat]}","${t.tcIn}","${t.tcOut}","${st}","${notes}"\n`;
+  });
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "kh_vfx_tracker.csv";
+  a.click();
+}
+
+render();
+</script>
+</body>
+</html>
