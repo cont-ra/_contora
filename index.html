@@ -71,7 +71,10 @@
   #gifImg { visibility: hidden; width: 0; height: 0; position: absolute; }
   .gif-player-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .gif-player-area canvas { max-width: 90vw; max-height: 75vh; border-radius: 8px; cursor: pointer; }
-  .gif-player-area .jsgif { display: inline-block; }
+  .gif-player-area .jsgif { display: inline-block; position: relative; }
+  .gif-loading-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; border-radius: 8px; z-index: 1; pointer-events: none; }
+  .gif-loading-overlay.hidden { display: none; }
+  .gif-loading-text { color: #fff; font-size: 24px; font-weight: 600; letter-spacing: 2px; }
   .gif-controls { display: flex; align-items: center; gap: 12px; }
   .gif-ctrl-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
   .gif-ctrl-btn:hover { background: rgba(255,255,255,0.2); }
@@ -739,7 +742,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
-let _sgif=null, _gifPaused=false, _gifUpdater=null, _gifLoaded=false;
+let _sgif=null, _gifPaused=false, _gifUpdater=null, _gifLoaded=false, _gifLoadingInterval=null;
 
 function openGif(id){
   // Clean up previous
@@ -754,8 +757,31 @@ function openGif(id){
   document.getElementById("gifScrubber").disabled=true;
 
   _sgif=new SuperGif({gif:img, auto_play:true, max_width:Math.min(window.innerWidth*0.9,1200)});
+
+  // Add loading overlay after SuperGif creates its wrapper
+  setTimeout(()=>{
+    const jsgif=document.querySelector(".gif-player-area .jsgif");
+    if(jsgif&&!document.getElementById("gifLoadingOverlay")){
+      const ov=document.createElement("div");
+      ov.className="gif-loading-overlay";ov.id="gifLoadingOverlay";
+      ov.innerHTML='<span class="gif-loading-text" id="gifLoadingText">Loading</span>';
+      jsgif.appendChild(ov);
+      // Animate dots
+      let dots=0;
+      _gifLoadingInterval=setInterval(()=>{
+        dots=(dots+1)%4;
+        const el=document.getElementById("gifLoadingText");
+        if(el)el.textContent="Loading"+".".repeat(dots);
+      },400);
+    }
+  },50);
+
   _sgif.load(()=>{
     _gifLoaded=true;
+    // Remove loading overlay
+    if(_gifLoadingInterval){clearInterval(_gifLoadingInterval);_gifLoadingInterval=null;}
+    const ov=document.getElementById("gifLoadingOverlay");
+    if(ov)ov.classList.add("hidden");
     document.getElementById("gifPlayBtn").disabled=false;
     document.getElementById("gifScrubber").disabled=false;
     // Canvas created by SuperGif — add click handler
@@ -783,6 +809,7 @@ function closeGif(){
 
 function _cleanupGif(){
   if(_gifUpdater){clearInterval(_gifUpdater);_gifUpdater=null;}
+  if(_gifLoadingInterval){clearInterval(_gifLoadingInterval);_gifLoadingInterval=null;}
   if(_sgif){try{_sgif.pause();}catch(e){}_sgif=null;}
   _gifPaused=false;_gifLoaded=false;
   // SuperGif wraps img in a div and adds canvas — nuke everything, rebuild clean
