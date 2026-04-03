@@ -257,7 +257,7 @@ const USERS = {
   admin:  { hash: "03910b928efe988e1cf30f56f1e24e04ff0c1b8d95cac159565020c8493fbabb", display: "Admin",  role: "admin" },
   nikita: { hash: "5e4ec99b255f996b65e22b605a02289fe3976e5aabc3753f135bcb217bbacf4b", display: "Nikita", role: "artist" },
   igor:   { hash: "63669fcc68f8066547cd0752ed9d8be28638ad3a45e0d2bf24b67218f7a26c23", display: "Igor",   role: "artist" },
-  client: { hash: "42f0429b0d5206775def63178814d730cbe9f3e4245fb94a39cf6adf2e877b37", display: "Client", role: "client" },
+  client: { hash: "9a5d23f351880fae8006cc830bbdd30c19acd6ed5464bef860583205fd62d6ec", display: "Client", role: "client" },
 };
 async function sha256(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");}
 let currentUser=null;
