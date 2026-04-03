@@ -78,8 +78,11 @@
   .gif-controls { display: flex; align-items: center; gap: 12px; }
   .gif-ctrl-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
   .gif-ctrl-btn:hover { background: rgba(255,255,255,0.2); }
-  .gif-scrubber { width: 300px; max-width: 60vw; height: 6px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none; cursor: pointer; }
+  .scrubber-wrap { position: relative; width: 300px; max-width: 60vw; height: 20px; display: flex; align-items: center; }
+  .gif-scrubber { width: 100%; height: 6px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none; cursor: pointer; position: relative; z-index: 1; }
   .gif-scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; }
+  .scrubber-markers { position: absolute; top: 0; left: 0; right: 0; height: 100%; pointer-events: none; z-index: 0; }
+  .scrubber-marker { position: absolute; top: 0; width: 2px; height: 100%; background: #f85149; transform: translateX(-50%); opacity: 0.8; }
   .gif-frame-label { color: #8b949e; font-size: 12px; font-family: 'SF Mono', monospace; min-width: 70px; text-align: center; }
   .gif-close-btn { position: absolute; top: 20px; right: 24px; background: none; border: none; color: #8b949e; font-size: 32px; cursor: pointer; line-height: 1; z-index: 10; }
   .gif-close-btn:hover { color: #fff; }
@@ -225,11 +228,19 @@
   <div class="gif-player-area" id="gifPlayerArea">
     <img id="gifImg" src="">
     <div class="gif-controls">
+      <button class="gif-ctrl-btn" onclick="stepFrame(-1)" title="Previous frame">&#9664;</button>
       <button class="gif-ctrl-btn" id="gifPlayBtn" onclick="toggleGifPause()">❚❚</button>
-      <input type="range" class="gif-scrubber" id="gifScrubber" min="0" max="100" value="0" oninput="seekGif(this.value)">
+      <button class="gif-ctrl-btn" onclick="stepFrame(1)" title="Next frame">&#9654;</button>
+      <div class="scrubber-wrap"><div class="scrubber-markers" id="scrubberMarkers"></div><input type="range" class="gif-scrubber" id="gifScrubber" min="0" max="100" value="0" oninput="seekGif(this.value)"></div>
       <span class="gif-frame-label" id="gifFrameLabel">0 / 0</span>
     </div>
     <div class="draw-toolbar">
+      <button class="draw-btn active" id="drawTool_pen" onclick="setDrawTool('pen',this)">&#9998; Pen</button>
+      <button class="draw-btn" id="drawTool_line" onclick="setDrawTool('line',this)">╱ Line</button>
+      <button class="draw-btn" id="drawTool_rect" onclick="setDrawTool('rect',this)">▭ Rect</button>
+      <button class="draw-btn" id="drawTool_circle" onclick="setDrawTool('circle',this)">○ Circle</button>
+      <button class="draw-btn" id="drawTool_arrow" onclick="setDrawTool('arrow',this)">→ Arrow</button>
+      <span style="color:#30363d;font-size:18px">|</span>
       <button class="draw-btn" id="drawToggle" onclick="toggleDraw()">&#9998; Draw</button>
       <button class="draw-color selected" id="dc_red" style="background:#f85149" onclick="setDrawColor('#f85149',this)"></button>
       <button class="draw-color" id="dc_yellow" style="background:#d29922" onclick="setDrawColor('#d29922',this)"></button>
@@ -314,7 +325,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.9</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v2.1</div>
 
 <script>
 const USERS = {
@@ -767,7 +778,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
 let _sgif=null, _gifPaused=false, _gifUpdater=null, _gifLoaded=false, _gifLoadingInterval=null, _gifCurrentId=null;
-let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null;
+let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null, _drawTool="pen", _shapeStart=null;
 
 function openGif(id){
   // Clean up previous
@@ -842,7 +853,7 @@ function _cleanupGif(){
   if(_gifLoadingInterval){clearInterval(_gifLoadingInterval);_gifLoadingInterval=null;}
   if(_sgif){try{_sgif.pause();}catch(e){}_sgif=null;}
   _gifPaused=false;_gifLoaded=false;_gifCurrentId=null;
-  _drawCanvas=null;_drawCtx=null;_drawStrokes=[];_drawing=false;_drawMode=false;
+  _drawCanvas=null;_drawCtx=null;_drawStrokes=[];_drawing=false;_drawMode=false;_drawTool="pen";_shapeStart=null;
   // SuperGif wraps img in a div and adds canvas — nuke everything, rebuild clean
   const area=document.getElementById("gifPlayerArea");
   const controls=area.querySelector(".gif-controls");
@@ -855,6 +866,8 @@ function _cleanupGif(){
 function toggleGifPause(){
   if(!_sgif||!_gifLoaded)return;
   if(_gifPaused){
+    // Clear drawing overlay when playing (drawings are per-frame)
+    if(_drawCtx&&_drawCanvas)_drawCtx.clearRect(0,0,_drawCanvas.width,_drawCanvas.height);
     _sgif.play();
     _gifPaused=false;
     document.getElementById("gifPlayBtn").textContent="❚❚";
@@ -865,7 +878,20 @@ function toggleGifPause(){
     const f=_sgif.get_current_frame();
     document.getElementById("gifScrubber").value=f;
     document.getElementById("gifFrameLabel").textContent=f+" / "+(_sgif.get_length()-1);
+    _switchFrame();
   }
+}
+
+function stepFrame(dir){
+  if(!_sgif||!_gifLoaded)return;
+  if(!_gifPaused){_sgif.pause();_gifPaused=true;document.getElementById("gifPlayBtn").textContent="▶";}
+  const total=_sgif.get_length();
+  let f=_sgif.get_current_frame()+dir;
+  if(f<0)f=0;if(f>=total)f=total-1;
+  _sgif.move_to(f);
+  document.getElementById("gifScrubber").value=f;
+  document.getElementById("gifFrameLabel").textContent=f+" / "+(total-1);
+  _switchFrame();
 }
 
 function seekGif(val){
@@ -873,6 +899,7 @@ function seekGif(val){
   _sgif.move_to(parseInt(val));
   if(!_gifPaused){_sgif.pause();_gifPaused=true;document.getElementById("gifPlayBtn").textContent="▶";}
   document.getElementById("gifFrameLabel").textContent=val+" / "+(_sgif.get_length()-1);
+  _switchFrame();
 }
 
 // --- DRAWING ---
@@ -902,7 +929,9 @@ function _initDrawCanvas(){
   cv.addEventListener("touchmove",e=>{e.preventDefault();_drawMove(_touchToMouse(e));},{passive:false});
   cv.addEventListener("touchend",_drawEnd);
   // Load existing drawings from state
-  _loadDrawings();
+  _loadDrawingsForFrame();
+  _redrawAll();
+  _updateMarkers();
 }
 
 function _touchToMouse(e){
@@ -923,42 +952,78 @@ function _drawStart(e){
   _drawing=true;
   const pos=_getDrawPos(e);
   const size=parseInt(document.getElementById("drawSize").value);
-  _currentStroke={color:_drawColor,width:size,points:[pos]};
-  _drawCtx.beginPath();
-  _drawCtx.strokeStyle=_drawColor;
-  _drawCtx.lineWidth=size;
-  _drawCtx.lineCap="round";_drawCtx.lineJoin="round";
-  _drawCtx.moveTo(pos.x,pos.y);
+  _shapeStart=pos;
+  if(_drawTool==="pen"){
+    _currentStroke={tool:"pen",color:_drawColor,width:size,points:[pos]};
+    _drawCtx.beginPath();_drawCtx.strokeStyle=_drawColor;_drawCtx.lineWidth=size;
+    _drawCtx.lineCap="round";_drawCtx.lineJoin="round";_drawCtx.moveTo(pos.x,pos.y);
+  } else {
+    _currentStroke={tool:_drawTool,color:_drawColor,width:size,start:pos,end:pos};
+  }
 }
 
 function _drawMove(e){
   if(!_drawing||!_currentStroke)return;
   const pos=_getDrawPos(e);
-  _currentStroke.points.push(pos);
-  _drawCtx.lineTo(pos.x,pos.y);
-  _drawCtx.stroke();
-  _drawCtx.beginPath();
-  _drawCtx.moveTo(pos.x,pos.y);
+  if(_drawTool==="pen"){
+    _currentStroke.points.push(pos);
+    _drawCtx.lineTo(pos.x,pos.y);_drawCtx.stroke();
+    _drawCtx.beginPath();_drawCtx.moveTo(pos.x,pos.y);
+  } else {
+    _currentStroke.end=pos;
+    _redrawAll();
+    _drawShape(_currentStroke);
+  }
 }
 
 function _drawEnd(){
   if(!_drawing)return;
   _drawing=false;
-  if(_currentStroke&&_currentStroke.points.length>1){
-    _drawStrokes.push(_currentStroke);
-    _saveDrawings();
+  if(_currentStroke){
+    if(_drawTool==="pen"&&_currentStroke.points&&_currentStroke.points.length>1){
+      _drawStrokes.push(_currentStroke);_saveDrawings();
+    } else if(_drawTool!=="pen"&&_currentStroke.start&&_currentStroke.end){
+      const dx=_currentStroke.end.x-_currentStroke.start.x;
+      const dy=_currentStroke.end.y-_currentStroke.start.y;
+      if(Math.abs(dx)+Math.abs(dy)>5){_drawStrokes.push(_currentStroke);_saveDrawings();}
+      else _redrawAll();
+    }
   }
-  _currentStroke=null;
+  _currentStroke=null;_shapeStart=null;
+}
+
+function _drawShape(s){
+  const ctx=_drawCtx;
+  ctx.strokeStyle=s.color;ctx.lineWidth=s.width;ctx.lineCap="round";ctx.lineJoin="round";
+  const x1=s.start.x,y1=s.start.y,x2=s.end.x,y2=s.end.y;
+  ctx.beginPath();
+  if(s.tool==="line"){
+    ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+  } else if(s.tool==="rect"){
+    ctx.rect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));
+  } else if(s.tool==="circle"){
+    const rx=Math.abs(x2-x1)/2,ry=Math.abs(y2-y1)/2;
+    const cx=Math.min(x1,x2)+rx,cy=Math.min(y1,y2)+ry;
+    ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+  } else if(s.tool==="arrow"){
+    ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    // Arrowhead
+    const angle=Math.atan2(y2-y1,x2-x1);const hl=Math.max(s.width*3,12);
+    ctx.beginPath();
+    ctx.moveTo(x2-hl*Math.cos(angle-0.4),y2-hl*Math.sin(angle-0.4));
+    ctx.lineTo(x2,y2);
+    ctx.lineTo(x2-hl*Math.cos(angle+0.4),y2-hl*Math.sin(angle+0.4));
+  }
+  ctx.stroke();
 }
 
 function _redrawAll(){
   if(!_drawCtx||!_drawCanvas)return;
   _drawCtx.clearRect(0,0,_drawCanvas.width,_drawCanvas.height);
   _drawStrokes.forEach(s=>{
-    if(s.points.length<2)return;
-    _drawCtx.beginPath();
-    _drawCtx.strokeStyle=s.color;
-    _drawCtx.lineWidth=s.width;
+    if(s.tool&&s.tool!=="pen"){_drawShape(s);return;}
+    if(!s.points||s.points.length<2)return;
+    _drawCtx.beginPath();_drawCtx.strokeStyle=s.color;_drawCtx.lineWidth=s.width;
     _drawCtx.lineCap="round";_drawCtx.lineJoin="round";
     _drawCtx.moveTo(s.points[0].x,s.points[0].y);
     for(let i=1;i<s.points.length;i++)_drawCtx.lineTo(s.points[i].x,s.points[i].y);
@@ -981,6 +1046,14 @@ function toggleDraw(){
   }
 }
 
+function setDrawTool(tool,btn){
+  _drawTool=tool;
+  document.querySelectorAll("[id^=drawTool_]").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  // Auto-enable draw mode
+  if(!_drawMode)toggleDraw();
+}
+
 function setDrawColor(color,btn){
   _drawColor=color;
   document.querySelectorAll(".draw-color").forEach(b=>b.classList.remove("selected"));
@@ -1001,27 +1074,69 @@ function clearDraw(){
   _saveDrawings();
 }
 
+function _currentFrame(){
+  if(!_sgif)return 0;
+  return _sgif.get_current_frame();
+}
+
 function _saveDrawings(){
   if(!_gifCurrentId)return;
   if(!state[_gifCurrentId])state[_gifCurrentId]={};
-  // Simplify points to save space: round to ints
-  const compact=_drawStrokes.map(s=>({
-    c:s.color,w:s.width,
-    p:s.points.map(pt=>[Math.round(pt.x),Math.round(pt.y)])
-  }));
-  state[_gifCurrentId].drawings=compact;
+  // Get all frame drawings
+  const allDrawings=state[_gifCurrentId].drawings||{};
+  const frame=_currentFrame();
+  if(_drawStrokes.length){
+    allDrawings[frame]=_drawStrokes.map(s=>{
+      if(s.tool&&s.tool!=="pen"){
+        return{t:s.tool,c:s.color,w:s.width,s:[Math.round(s.start.x),Math.round(s.start.y)],e:[Math.round(s.end.x),Math.round(s.end.y)]};
+      }
+      return{t:"pen",c:s.color,w:s.width,p:s.points.map(pt=>[Math.round(pt.x),Math.round(pt.y)])};
+    });
+  } else {
+    delete allDrawings[frame];
+  }
+  state[_gifCurrentId].drawings=allDrawings;
   saveState(state);
+  _updateMarkers();
 }
 
-function _loadDrawings(){
+function _loadDrawingsForFrame(){
   _drawStrokes=[];
   if(!_gifCurrentId||!state[_gifCurrentId]?.drawings)return;
-  const compact=state[_gifCurrentId].drawings;
-  _drawStrokes=compact.map(s=>({
-    color:s.c,width:s.w,
-    points:s.p.map(pt=>({x:pt[0],y:pt[1]}))
-  }));
+  const allDrawings=state[_gifCurrentId].drawings;
+  // Migrate: if array (old format), convert to frame 0
+  if(Array.isArray(allDrawings)){
+    state[_gifCurrentId].drawings={"0":allDrawings};
+    return _loadDrawingsForFrame();
+  }
+  const frame=_currentFrame();
+  const compact=allDrawings[frame];
+  if(!compact)return;
+  _drawStrokes=compact.map(s=>{
+    if(s.t&&s.t!=="pen"){
+      return{tool:s.t,color:s.c,width:s.w,start:{x:s.s[0],y:s.s[1]},end:{x:s.e[0],y:s.e[1]}};
+    }
+    return{tool:"pen",color:s.c,width:s.w,points:(s.p||[]).map(pt=>({x:pt[0],y:pt[1]}))};
+  });
+}
+
+function _switchFrame(){
+  _loadDrawingsForFrame();
   _redrawAll();
+}
+
+function _updateMarkers(){
+  const container=document.getElementById("scrubberMarkers");
+  if(!container||!_sgif)return;
+  const total=_sgif.get_length();
+  if(!total)return;
+  const allDrawings=state[_gifCurrentId]?.drawings||{};
+  container.innerHTML="";
+  for(const frame of Object.keys(allDrawings)){
+    if(!allDrawings[frame]?.length)continue;
+    const pct=(parseInt(frame)/(total-1))*100;
+    container.innerHTML+=`<div class="scrubber-marker" style="left:${pct}%"></div>`;
+  }
 }
 
 
@@ -1030,6 +1145,8 @@ document.addEventListener("keydown",e=>{
   if(document.getElementById("gifOverlay").classList.contains("hidden"))return;
   if(e.key==="Escape")closeGif();
   if(e.key===" "){e.preventDefault();toggleGifPause();}
+  if(e.key==="ArrowLeft"){e.preventDefault();stepFrame(-1);}
+  if(e.key==="ArrowRight"){e.preventDefault();stepFrame(1);}
 });
 
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
