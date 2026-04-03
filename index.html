@@ -765,17 +765,32 @@ async function toggleGifPlay(){
   }
 }
 
-// Draw first frame of gifs onto canvases (static thumbnails)
+// Cache first-frame data URLs so we never re-fetch gifs on re-render
+const _thumbCache={};
+
 function initGifThumbs(){
   document.querySelectorAll("canvas.gif-thumb[data-gif]").forEach(cv=>{
     const src=cv.dataset.gif;
     if(cv.dataset.loaded)return;
+    // If cached, draw from cache instantly
+    if(_thumbCache[src]){
+      const ci=new Image();
+      ci.onload=()=>{cv.width=ci.naturalWidth;cv.height=ci.naturalHeight;cv.getContext("2d").drawImage(ci,0,0);cv.dataset.loaded="1";};
+      ci.src=_thumbCache[src];
+      return;
+    }
+    // First time: load gif, grab frame, cache as dataURL
     const img=new Image();
     img.onload=()=>{
+      const c=document.createElement("canvas");
+      c.width=img.naturalWidth;c.height=img.naturalHeight;
+      c.getContext("2d").drawImage(img,0,0);
+      const dataUrl=c.toDataURL();
+      _thumbCache[src]=dataUrl;
       cv.width=img.naturalWidth;cv.height=img.naturalHeight;
       cv.getContext("2d").drawImage(img,0,0);
       cv.dataset.loaded="1";
-      img.src=""; // stop gif animation / free memory
+      img.src=""; // free memory, stop animation
     };
     img.src=src;
   });
