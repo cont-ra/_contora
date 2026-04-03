@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://unpkg.com/freezeframe@5.0.2/dist/freezeframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/libgif@0.0.3/libgif.js"></script>
 <title>KILLHOUSE VFX Tracker — Declined Tasks</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -68,9 +68,15 @@
   .gif-none { width: 70px; height: 44px; border-radius: 4px; background: #161b22; border: 1px solid #21262d; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #484f58; }
   .gif-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 3000; display: flex; align-items: center; justify-content: center; flex-direction: column; }
   .gif-overlay.hidden { display: none; }
-  #gifImg { max-width: 90vw; max-height: 80vh; border-radius: 8px; cursor: pointer; display: block; }
-  .gif-paused-label { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 13px; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
-  .gif-paused-label.show { opacity: 1; }
+  #gifImg { visibility: hidden; width: 0; height: 0; position: absolute; }
+  .gif-player-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .gif-player-area canvas { max-width: 90vw; max-height: 75vh; border-radius: 8px; cursor: pointer; }
+  .gif-controls { display: flex; align-items: center; gap: 12px; }
+  .gif-ctrl-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .gif-ctrl-btn:hover { background: rgba(255,255,255,0.2); }
+  .gif-scrubber { width: 300px; max-width: 60vw; height: 6px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none; cursor: pointer; }
+  .gif-scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; }
+  .gif-frame-label { color: #8b949e; font-size: 12px; font-family: 'SF Mono', monospace; min-width: 70px; text-align: center; }
   .gif-close-btn { position: absolute; top: 20px; right: 24px; background: none; border: none; color: #8b949e; font-size: 32px; cursor: pointer; line-height: 1; z-index: 1; }
   .gif-close-btn:hover { color: #fff; }
   td.desc-cell.editable { cursor: pointer; border-radius: 4px; transition: 0.15s; padding: 8px 12px; }
@@ -200,8 +206,14 @@
 
 <div class="gif-overlay hidden" id="gifOverlay" onclick="if(event.target===this)closeGif()">
   <button class="gif-close-btn" onclick="closeGif()">&times;</button>
-  <img id="gifImg" src="" style="display:none" onclick="toggleGifPause()">
-  <div class="gif-paused-label" id="gifPausedLabel">PAUSED — click to resume</div>
+  <div class="gif-player-area" id="gifPlayerArea">
+    <img id="gifImg" src="">
+    <div class="gif-controls">
+      <button class="gif-ctrl-btn" id="gifPlayBtn" onclick="toggleGifPause()">❚❚</button>
+      <input type="range" class="gif-scrubber" id="gifScrubber" min="0" max="100" value="0" oninput="seekGif(this.value)">
+      <span class="gif-frame-label" id="gifFrameLabel">0 / 0</span>
+    </div>
+  </div>
 </div>
 
 <div class="note-overlay hidden" id="noteOverlay" onclick="if(event.target===this)closeNote()">
@@ -726,47 +738,78 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
-let _ff=null, _gifPaused=false;
+let _sgif=null, _gifPaused=false, _gifUpdater=null;
 
 function openGif(id){
+  // Clean up previous
+  _cleanupGif();
   const img=document.getElementById("gifImg");
-  // Destroy previous freezeframe instance
-  if(_ff){try{_ff.destroy();}catch(e){}_ff=null;}
-  _gifPaused=false;
-  document.getElementById("gifPausedLabel").classList.remove("show");
   img.src="gif/"+id+".gif";
-  img.style.display="block";
   document.getElementById("gifOverlay").classList.remove("hidden");
-  // Init freezeframe after image loads
-  img.onload=()=>{
-    _ff=new Freezeframe(img,{trigger:false,overlay:false});
-    // Start playing immediately
-    _ff.start();
-  };
+  document.getElementById("gifPlayBtn").textContent="❚❚";
+  _gifPaused=false;
+
+  _sgif=new SuperGif({gif:img, auto_play:true, max_width:Math.min(window.innerWidth*0.9,1200)});
+  _sgif.load(()=>{
+    // Canvas created by SuperGif — add click handler
+    const cv=_sgif.get_canvas();
+    cv.onclick=toggleGifPause;
+    cv.style.cursor="pointer";
+    // Setup scrubber
+    const total=_sgif.get_length();
+    const scrub=document.getElementById("gifScrubber");
+    scrub.max=total-1;scrub.value=0;
+    // Update scrubber position during playback
+    _gifUpdater=setInterval(()=>{
+      if(!_sgif||_gifPaused)return;
+      const f=_sgif.get_current_frame();
+      scrub.value=f;
+      document.getElementById("gifFrameLabel").textContent=f+" / "+(total-1);
+    },50);
+  });
 }
 
 function closeGif(){
-  if(_ff){try{_ff.destroy();}catch(e){}_ff=null;}
-  _gifPaused=false;
-  const img=document.getElementById("gifImg");
-  img.style.display="none";
-  img.onload=null;
-  img.src="";
-  document.getElementById("gifPausedLabel").classList.remove("show");
+  _cleanupGif();
   document.getElementById("gifOverlay").classList.add("hidden");
 }
 
-function toggleGifPause(){
-  if(!_ff)return;
-  if(_gifPaused){
-    _ff.start();
-    _gifPaused=false;
-    document.getElementById("gifPausedLabel").classList.remove("show");
-  } else {
-    _ff.stop();
-    _gifPaused=true;
-    document.getElementById("gifPausedLabel").classList.add("show");
+function _cleanupGif(){
+  if(_gifUpdater){clearInterval(_gifUpdater);_gifUpdater=null;}
+  if(_sgif){
+    try{_sgif.pause();}catch(e){}
+    // Remove SuperGif's generated elements
+    const area=document.getElementById("gifPlayerArea");
+    const divs=area.querySelectorAll("div.jsgif");
+    divs.forEach(d=>d.remove());
+    _sgif=null;
   }
+  _gifPaused=false;
+  const img=document.getElementById("gifImg");
+  img.src="";
+}
+
+function toggleGifPause(){
+  if(!_sgif)return;
+  if(_gifPaused){
+    _sgif.play();
+    _gifPaused=false;
+    document.getElementById("gifPlayBtn").textContent="❚❚";
+  } else {
+    _sgif.pause();
+    _gifPaused=true;
+    document.getElementById("gifPlayBtn").textContent="▶";
+    const f=_sgif.get_current_frame();
+    document.getElementById("gifScrubber").value=f;
+    document.getElementById("gifFrameLabel").textContent=f+" / "+(_sgif.get_length()-1);
+  }
+}
+
+function seekGif(val){
+  if(!_sgif)return;
+  _sgif.move_to(parseInt(val));
+  if(!_gifPaused){_sgif.pause();_gifPaused=true;document.getElementById("gifPlayBtn").textContent="▶";}
+  document.getElementById("gifFrameLabel").textContent=val+" / "+(_sgif.get_length()-1);
 }
 
 
