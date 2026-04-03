@@ -782,36 +782,6 @@ function toggleGifPlay(){
   }
 }
 
-// Cache first-frame data URLs so we never re-fetch gifs on re-render
-const _thumbCache={};
-
-function initGifThumbs(){
-  document.querySelectorAll("canvas.gif-thumb[data-gif]").forEach(cv=>{
-    const src=cv.dataset.gif;
-    if(cv.dataset.loaded)return;
-    // If cached, draw from cache instantly
-    if(_thumbCache[src]){
-      const ci=new Image();
-      ci.onload=()=>{cv.width=ci.naturalWidth;cv.height=ci.naturalHeight;cv.getContext("2d").drawImage(ci,0,0);cv.dataset.loaded="1";};
-      ci.src=_thumbCache[src];
-      return;
-    }
-    // First time: load gif, grab frame, cache as dataURL
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement("canvas");
-      c.width=img.naturalWidth;c.height=img.naturalHeight;
-      c.getContext("2d").drawImage(img,0,0);
-      const dataUrl=c.toDataURL();
-      _thumbCache[src]=dataUrl;
-      cv.width=img.naturalWidth;cv.height=img.naturalHeight;
-      cv.getContext("2d").drawImage(img,0,0);
-      cv.dataset.loaded="1";
-      img.src=""; // free memory, stop animation
-    };
-    img.src=src;
-  });
-}
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeGif();});
 
@@ -837,7 +807,7 @@ function render(){
     return `<tr>
       <td style="color:#484f58">${r.idx}</td>
       <td class="id-cell">${r.id}</td>
-      <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><canvas class="gif-thumb" data-gif="gif/${r.id}.gif"></canvas><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
+      <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
       <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
       <td class="category-cell"><span class="cat-tag cat-${r.cat}">${CAT_LABELS[r.cat]}</span></td>
       <td class="tc-cell">${r.tcIn}</td>
@@ -852,7 +822,6 @@ function render(){
     </tr>`;
   }).join("");
   updateStats();
-  setTimeout(initGifThumbs,50);
 }
 
 function startEditDesc(tid,td,ev){
