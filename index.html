@@ -774,7 +774,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
-let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=25;
+let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24;
 let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null, _drawTool="pen", _shapeStart=null;
 
 function _vid(){return document.getElementById("gifVideo");}
@@ -785,32 +785,17 @@ function openGif(id){
   _drawMode=false;
   document.getElementById("drawToggle").classList.remove("active");
   const vid=_vid();
-  vid.src="video/"+id+".mp4";
-  vid.load();
-  vid.play();
-  _gifPaused=false;
-  document.getElementById("gifPlayBtn").textContent="❚❚";
   document.getElementById("gifOverlay").classList.remove("hidden");
 
-  function _onReady(){
-    const totalFrames=Math.round(vid.duration*_videoFPS);
-    const scrub=document.getElementById("gifScrubber");
-    scrub.max=totalFrames-1;scrub.value=0;
-    _initDrawCanvas();
-    _updateMarkers();
-  }
-  vid.onloadedmetadata=_onReady;
-  if(vid.readyState>=1)_onReady();
-
-  // Smooth scrubber update via rAF (not ontimeupdate which fires ~4x/sec)
-  let _lastF=-1;
+  let _lastFrame=-1;
+  let _readyCalled=false;
   function _tickUpdate(){
     if(!_gifCurrentId)return;
     if(!_gifPaused){
-      const f=Math.round(vid.currentTime*_videoFPS);
-      if(f!==_lastF){
-        _lastF=f;
-        document.getElementById("gifScrubber").value=f;
+      const f=_currentFrame();
+      if(f!==_lastFrame){
+        _lastFrame=f;
+        document.getElementById("gifScrubber").value=Math.round(vid.currentTime*1000);
         _updateFrameLabel(f);
         _loadDrawingsForFrame();
         _redrawAll();
@@ -818,7 +803,31 @@ function openGif(id){
     }
     _gifUpdater=requestAnimationFrame(_tickUpdate);
   }
-  _gifUpdater=requestAnimationFrame(_tickUpdate);
+
+  function _onReady(){
+    if(_readyCalled)return;
+    _readyCalled=true;
+    const scrub=document.getElementById("gifScrubber");
+    scrub.max=Math.round(vid.duration*1000);
+    scrub.value=0;
+    _initDrawCanvas();
+    _updateMarkers();
+    _gifPaused=false;
+    document.getElementById("gifPlayBtn").textContent="❚❚";
+    vid.play().catch(()=>{
+      _gifPaused=true;
+      document.getElementById("gifPlayBtn").textContent="▶";
+    });
+    _gifUpdater=requestAnimationFrame(_tickUpdate);
+  }
+
+  vid.src="video/"+id+".mp4";
+  vid.load();
+  _gifPaused=true;
+  document.getElementById("gifPlayBtn").textContent="❚❚";
+
+  vid.addEventListener("loadedmetadata",_onReady,{once:true});
+  if(vid.readyState>=1)_onReady();
 }
 
 function closeGif(){
@@ -849,7 +858,7 @@ function toggleGifPause(){
     _gifPaused=true;
     document.getElementById("gifPlayBtn").textContent="▶";
     const f=Math.round(vid.currentTime*_videoFPS);
-    document.getElementById("gifScrubber").value=f;
+    document.getElementById("gifScrubber").value=Math.round(vid.currentTime*1000);
     _updateFrameLabel(f);
     _switchFrame();
   }
@@ -896,31 +905,22 @@ function stepFrame(dir){
   const step=1/_videoFPS;
   vid.currentTime=Math.max(0,Math.min(vid.duration,vid.currentTime+dir*step));
   const f=_currentFrame();
-  document.getElementById("gifScrubber").value=f;
+  document.getElementById("gifScrubber").value=Math.round(vid.currentTime*1000);
   _updateFrameLabel(f);
   _switchFrame();
 }
 
-let _seekQueued=null;
 function seekGif(val){
   const vid=_vid();
   if(!vid.duration)return;
   if(!_gifPaused){vid.pause();_gifPaused=true;document.getElementById("gifPlayBtn").textContent="▶";}
-  const f=parseInt(val);
-  _updateFrameLabel(f);
-  // Queue seek — browser can only handle one at a time
-  if(vid.seeking){_seekQueued=f;return;}
-  vid.currentTime=f/_videoFPS;
-  vid.onseeked=()=>{
-    _switchFrame();
-    if(_seekQueued!==null){
-      const next=_seekQueued;_seekQueued=null;
-      vid.currentTime=next/_videoFPS;
-    } else {
-      vid.onseeked=null;
-    }
-  };
+  const ms=parseInt(val);
+  vid.currentTime=ms/1000;
+  _updateFrameLabel(Math.round(vid.currentTime*_videoFPS));
 }
+document.getElementById("gifVideo").addEventListener("seeked",function(){
+  _switchFrame();
+});
 
 // --- DRAWING ---
 function _initDrawCanvas(){
@@ -1061,7 +1061,7 @@ function toggleDraw(){
   if(_drawMode){
     btn.classList.add("active");
     // Auto-pause gif when drawing
-    if(!_gifPaused&&_sgif&&_gifLoaded)toggleGifPause();
+    if(!_gifPaused&&_gifCurrentId)toggleGifPause();
     // Ensure drawCanvas exists and sized correctly
     if(!cv){_initDrawCanvas();cv=document.getElementById("drawCanvas");}
     if(cv){
@@ -1104,8 +1104,8 @@ function clearDraw(){
 }
 
 function _currentFrame(){
-  if(!_sgif)return 0;
-  return _sgif.get_current_frame();
+  const vid=_vid();
+  return Math.round(vid.currentTime*_videoFPS);
 }
 
 function _saveDrawings(){
@@ -1156,8 +1156,9 @@ function _switchFrame(){
 
 function _updateMarkers(){
   const container=document.getElementById("scrubberMarkers");
-  if(!container||!_sgif)return;
-  const total=_sgif.get_length();
+  if(!container)return;
+  const vid=_vid();
+  const total=_totalFrames();
   if(!total)return;
   const allDrawings=state[_gifCurrentId]?.drawings||{};
   container.innerHTML="";
