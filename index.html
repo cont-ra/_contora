@@ -1907,6 +1907,17 @@ document.addEventListener("keydown",e=>{
   if(e.key===" "){e.preventDefault();toggleGifPause();}
   if(e.key==="ArrowLeft"){e.preventDefault();stepFrame(-1);}
   if(e.key==="ArrowRight"){e.preventDefault();stepFrame(1);}
+  if(e.key==="ArrowUp"||e.key==="ArrowDown"){
+    e.preventDefault();
+    const ids=Array.from(document.querySelectorAll("#tbody tr .id-cell")).map(td=>td.textContent.trim()).filter(id=>hasGif(id));
+    if(!ids.length)return;
+    const cur=_gifCurrentId;
+    const idx=ids.indexOf(cur);
+    let next;
+    if(e.key==="ArrowUp") next=ids[idx>0?idx-1:ids.length-1];
+    else next=ids[idx<ids.length-1?idx+1:0];
+    if(next&&next!==cur){closeGif();openGif(next);}
+  }
 });
 document.addEventListener("keydown",e=>{
   if(e.key==='Enter'&&!e.shiftKey&&document.activeElement===document.getElementById("pnInputTA")){
