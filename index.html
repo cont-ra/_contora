@@ -147,6 +147,10 @@
   .cat-dropdown-divider { height: 1px; background: #30363d; margin: 4px 0; }
   .cat-dropdown-input { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box; }
   .cat-dropdown-input:focus { border-color: #1f6feb; }
+  .cat-edit-btn { background: rgba(255,255,255,0.1); border: 1px solid #30363d; color: #8b949e; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
+  .cat-edit-btn:hover { color: #c9d1d9; background: #21262d; }
+  .cat-del-btn { color: #484f58; cursor: pointer; font-size: 16px; margin-left: auto; }
+  .cat-del-btn:hover { color: #f85149; }
   .status-select, .assign-select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
   .status-select:disabled, .assign-select:disabled { opacity: 0.4; cursor: not-allowed; }
   .status-select.s-todo { border-color: #f85149; color: #f85149; }
@@ -449,30 +453,56 @@ const TASKS=[
 ];
 const CAT_LABELS={voronka:"Воронки",fpv:"ФПВ дрон",vrezka:"Врезка",angar:"Ангар",puli:"Пули/Царапины",vzryv:"Взрыв/Сажа",dym:"Дым",other:"Другое"};
 const CAT_COLORS={voronka:"#d29922",fpv:"#bc8cff",vrezka:"#3fb950",angar:"#f0883e",puli:"#f778ba",vzryv:"#f85149",dym:"#8b949e",other:"#8b949e"};
+const _RAND_COLORS=["#e06c75","#e5c07b","#98c379","#56b6c2","#61afef","#c678dd","#d19a66","#be5046","#7ec8e3","#f0883e"];
+function _loadCustomCats(){const cc=state.__categories||{};Object.keys(cc).forEach(k=>{if(!CAT_LABELS[k])CAT_LABELS[k]=cc[k].label;if(!CAT_COLORS[k])CAT_COLORS[k]=cc[k].color;});}
+function _saveCustomCat(key,label,color){if(!state.__categories)state.__categories={};state.__categories[key]={label,color};}
+function _randCatColor(){return _RAND_COLORS[Math.floor(Math.random()*_RAND_COLORS.length)];}
 function getCat(id){return state[id]?.cat||TASKS.find(t=>t.id===id)?.cat||"other";}
+function getCatColor(cat){return CAT_COLORS[cat]||"#8b949e";}
+function getCatLabel(cat){return CAT_LABELS[cat]||cat;}
 function getAllCatKeys(){const keys=new Set(Object.keys(CAT_LABELS));TASKS.forEach(t=>keys.add(t.cat));Object.values(state).forEach(s=>{if(s.cat)keys.add(s.cat);});return[...keys];}
-function _catTag(id,cat){
-  const label=CAT_LABELS[cat]||cat;
-  return`<span class="cat-tag cat-${cat} editable" onclick="openCatDropdown('${id}',this)">${label}</span>`;
+function _catTagHtml(cat,extra){
+  const c=getCatColor(cat);
+  const bg=c+"22";
+  return`<span class="cat-tag${extra||''}" style="background:${bg};color:${c};border:1px solid ${c}44">${esc(getCatLabel(cat))}</span>`;
 }
+function _catTag(id,cat){
+  const c=getCatColor(cat);
+  const bg=c+"22";
+  return`<span class="cat-tag editable" style="background:${bg};color:${c};border:1px solid ${c}44" onclick="openCatDropdown('${id}',this)">${esc(getCatLabel(cat))}</span>`;
+}
+let _catEditMode=false;
 function openCatDropdown(id,el){
   closeCatDropdown();
+  _catEditMode=false;
   const cat=getCat(id);
   const keys=getAllCatKeys();
   const rect=el.getBoundingClientRect();
   const dd=document.createElement("div");
-  dd.className="cat-dropdown";dd.id="catDropdown";
+  dd.className="cat-dropdown";dd.id="catDropdown";dd.dataset.tid=id;
   dd.style.top=(rect.bottom+4)+"px";dd.style.left=rect.left+"px";dd.style.position="fixed";
+  _renderCatDropdownItems(dd,id,cat,keys,false);
+  document.body.appendChild(dd);
+  setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);
+}
+function _renderCatDropdownItems(dd,id,cat,keys,editMode){
   let html=keys.map(k=>{
-    const label=CAT_LABELS[k]||k;
     const active=k===cat?" active":"";
-    return`<div class="cat-dropdown-item${active}" onclick="setCat('${id}','${k}')"><span class="cat-tag cat-${k}">${esc(label)}</span></div>`;
+    const delBtn=editMode?` <span class="cat-del-btn" onclick="event.stopPropagation();deleteCat('${k}')">&times;</span>`:"";
+    return`<div class="cat-dropdown-item${active}" onclick="setCat('${id}','${k}')">${_catTagHtml(k)}${delBtn}</div>`;
   }).join("");
   html+=`<div class="cat-dropdown-divider"></div>`;
-  html+=`<input class="cat-dropdown-input" placeholder="New category..." onkeydown="if(event.key==='Enter'){addNewCat('${id}',this.value);}">`;
+  html+=`<div style="display:flex;gap:4px;align-items:center"><input class="cat-dropdown-input" placeholder="New category..." onkeydown="if(event.key==='Enter'){addNewCat('${id}',this.value);}">`;
+  html+=`<button class="cat-edit-btn" onclick="event.stopPropagation();toggleCatEdit('${id}')" title="Edit categories">&#9998;</button></div>`;
   dd.innerHTML=html;
-  document.body.appendChild(dd);
-  setTimeout(()=>dd.querySelector("input")?.focus(),50);
+}
+function toggleCatEdit(id){
+  _catEditMode=!_catEditMode;
+  const dd=document.getElementById("catDropdown");
+  if(!dd)return;
+  const cat=getCat(id);
+  const keys=getAllCatKeys();
+  _renderCatDropdownItems(dd,id,cat,keys,_catEditMode);
   setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);
 }
 function _closeCatOnClick(e){
@@ -480,12 +510,28 @@ function _closeCatOnClick(e){
   if(dd&&!dd.contains(e.target)){closeCatDropdown();}
   else if(dd){setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);}
 }
-function closeCatDropdown(){const dd=document.getElementById("catDropdown");if(dd)dd.remove();}
+function closeCatDropdown(){const dd=document.getElementById("catDropdown");if(dd)dd.remove();_catEditMode=false;}
 function addNewCat(id,name){
   if(!name||!name.trim())return;
   const key=name.trim().toLowerCase().replace(/[^a-zа-яёіїє0-9]/gi,"_");
-  if(!CAT_LABELS[key]){CAT_LABELS[key]=name.trim();CAT_COLORS[key]="#8b949e";}
+  if(!CAT_LABELS[key]){
+    const color=_randCatColor();
+    CAT_LABELS[key]=name.trim();
+    CAT_COLORS[key]=color;
+    _saveCustomCat(key,name.trim(),color);
+  }
   setCat(id,key);
+}
+function deleteCat(key){
+  if(!isAdmin())return;
+  delete CAT_LABELS[key];delete CAT_COLORS[key];
+  if(state.__categories)delete state.__categories[key];
+  // Reset any shots using this cat to "other"
+  Object.keys(state).forEach(id=>{if(state[id]?.cat===key)state[id].cat="other";});
+  TASKS.forEach(t=>{if(t.cat===key)t.cat="other";});
+  saveState(state);
+  closeCatDropdown();
+  render();
 }
 function setCat(id,val){
   if(!isAdmin())return;
@@ -596,6 +642,7 @@ function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
   if(d.artistNotes){d.artistNotes.forEach((n,i)=>{if(n.id===undefined){n.id=i;c=true;}});}
 }if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 runMigrations();
+_loadCustomCats();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 function getStatus(id){return state[id]?.status||"todo";}
@@ -1491,7 +1538,7 @@ function render(){
         const descTd=cells[3];
         if(!descTd.querySelector('.desc-edit-ta'))descTd.innerHTML=descHtml;
       }
-      if(cells[4]){const rc=getCat(r.id);cells[4].innerHTML=isAdmin()?_catTag(r.id,rc):`<span class="cat-tag cat-${rc}">${CAT_LABELS[rc]||rc}</span>`;}
+      if(cells[4]){const rc=getCat(r.id);cells[4].innerHTML=isAdmin()?_catTag(r.id,rc):_catTagHtml(rc);}
       if(cells[7]){const sel=cells[7].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
       if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
       if(cells[9]&&!cells[9].querySelector('.desc-edit-ta'))cells[9].innerHTML=an||'<span style="color:#484f58">...</span>';
@@ -1512,7 +1559,7 @@ function _buildRow(r){
     <td class="id-cell">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
-    <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):`<span class="cat-tag cat-${getCat(r.id)}">${CAT_LABELS[getCat(r.id)]||getCat(r.id)}</span>`}</td>
+    <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>
     <td class="tc-cell">${r.tcOut}</td>
     <td><select class="assign-select${assignCls}" onchange="setAssignee('${r.id}',this.value)" ${adm?"":"disabled"}><option value="" ${!r.assignee?"selected":""}>—</option>${artistOpts}</select></td>
