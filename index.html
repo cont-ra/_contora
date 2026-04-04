@@ -24,6 +24,31 @@
   .user-badge .uname { font-weight: 600; }
   .logout-link { color: #484f58; font-size: 12px; cursor: pointer; text-decoration: underline; margin-left: 4px; }
   .logout-link:hover { color: #8b949e; }
+  .admin-gear { color: #484f58; font-size: 16px; cursor: pointer; margin-left: 8px; background: none; border: none; padding: 2px 4px; }
+  .admin-gear:hover { color: #c9d1d9; }
+  .admin-menu { position: fixed; top: 40px; right: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 4px 0; z-index: 5000; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .admin-menu-item { padding: 8px 16px; font-size: 13px; color: #c9d1d9; cursor: pointer; }
+  .admin-menu-item:hover { background: #21262d; }
+  .admin-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 6000; display: flex; align-items: center; justify-content: center; }
+  .admin-modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 500px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+  .admin-modal-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
+  .admin-modal-header h3 { margin: 0; color: #c9d1d9; font-size: 16px; }
+  .admin-modal-close { background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
+  .admin-modal-body { padding: 16px 20px; }
+  .artist-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #21262d; }
+  .artist-row .artist-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .artist-row .artist-name { flex: 1; color: #c9d1d9; font-size: 14px; }
+  .artist-row .artist-role { color: #8b949e; font-size: 11px; text-transform: uppercase; }
+  .artist-row .artist-del { background: none; border: none; color: #484f58; cursor: pointer; font-size: 14px; }
+  .artist-row .artist-del:hover { color: #f85149; }
+  .add-artist-form { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
+  .add-artist-form input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; }
+  .add-artist-form input:focus { border-color: #1f6feb; outline: none; }
+  .add-artist-form select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .generated-key { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  .generated-key code { color: #3fb950; font-family: 'SF Mono', monospace; font-size: 14px; flex: 1; word-break: break-all; }
+  .generated-key button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .generated-key button:hover { background: #30363d; }
   .login-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
   .login-overlay.hidden { display: none; }
   .login-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 32px; width: 340px; text-align: center; }
@@ -440,6 +465,7 @@
     <span class="dot" id="userDot"></span>
     <span class="uname" id="userName"></span>
     <span class="logout-link" onclick="logout()">logout</span>
+    <button class="admin-gear" id="adminGear" onclick="toggleAdminMenu()" style="display:none" title="Admin menu">⚙</button>
   </div>
 </div>
 <p class="subtitle">Declined tasks (Coffeepost) — 28 shots to review</p>
@@ -501,8 +527,9 @@ function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};sess
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
 async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
   // Pull latest data from remote
-  const pulled=await _pullRemote();if(pulled)runMigrations();
+  const pulled=await _pullRemote();if(pulled){runMigrations();if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
+  document.getElementById("adminGear").style.display=isAdmin()?'':'none';
   render();
 }
 function logout(){sessionStorage.removeItem("kh_user");currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
@@ -642,7 +669,9 @@ function setCat(id,val){
   saveState(state);
   render();
 }
-const ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
+const _DEFAULT_ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"}];
+function _getArtists(){return state.__artists||_DEFAULT_ARTISTS;}
+const ARTISTS=_DEFAULT_ARTISTS; // initial, patched after state load
 const STORAGE_KEY="kh_vfx_tracker";
 const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
 const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
@@ -744,6 +773,7 @@ function runMigrations(){let c=false;for(const[k,d]of Object.entries(state)){
   if(d.artistNotes){d.artistNotes.forEach((n,i)=>{if(n.id===undefined){n.id=i;c=true;}});}
 }if(c)localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 runMigrations();
+if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
@@ -792,6 +822,94 @@ function openPrioDropdown(id,el){
 }
 function _closePrioHandler(){closePrioDropdown();}
 function closePrioDropdown(){const d=document.getElementById("prioDropdown");if(d)d.remove();}
+
+// --- ADMIN MENU ---
+function toggleAdminMenu(){
+  const old=document.getElementById("adminMenu");
+  if(old){old.remove();return;}
+  const dd=document.createElement("div");
+  dd.className="admin-menu";dd.id="adminMenu";
+  dd.innerHTML=`<div class="admin-menu-item" onclick="closeAdminMenu();openArtistManager()">👥 Manage Artists</div>`;
+  document.body.appendChild(dd);
+  setTimeout(()=>document.addEventListener("click",closeAdminMenu,{once:true}),0);
+}
+function closeAdminMenu(){const d=document.getElementById("adminMenu");if(d)d.remove();}
+
+function openArtistManager(){
+  const ov=document.createElement("div");
+  ov.className="admin-modal-overlay";ov.id="artistManagerOverlay";
+  ov.onclick=(e)=>{if(e.target===ov)closeArtistManager();};
+  const artists=_getArtists();
+  let html=`<div class="admin-modal"><div class="admin-modal-header"><h3>Manage Artists</h3><button class="admin-modal-close" onclick="closeArtistManager()">&times;</button></div><div class="admin-modal-body">`;
+  html+=`<div id="artistList">`;
+  artists.forEach((a,i)=>{
+    html+=`<div class="artist-row"><div class="artist-dot dot-${a.id}" style="background:${_artistColor(a.id)}"></div><span class="artist-name">${esc(a.display)}</span><span class="artist-role">artist</span><button class="artist-del" onclick="removeArtist(${i})" title="Remove">&times;</button></div>`;
+  });
+  html+=`</div>`;
+  html+=`<div class="add-artist-form"><input type="text" id="newArtistName" placeholder="Artist name..."><button class="files-btn primary" onclick="addArtist()">+ Add</button></div>`;
+  html+=`<div id="generatedKeyBox"></div>`;
+  html+=`</div></div>`;
+  ov.innerHTML=html;
+  document.body.appendChild(ov);
+}
+function closeArtistManager(){const d=document.getElementById("artistManagerOverlay");if(d)d.remove();}
+function _artistColor(id){
+  const colors=["#f97583","#79c0ff","#d2a8ff","#7ee787","#ffa657","#ff7b72","#a5d6ff"];
+  let h=0;for(let i=0;i<id.length;i++)h=((h<<5)-h)+id.charCodeAt(i);
+  return colors[Math.abs(h)%colors.length];
+}
+function _generateKey(len){
+  const chars="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let r="";for(let i=0;i<len;i++)r+=chars[Math.floor(Math.random()*chars.length)];
+  return r;
+}
+async function addArtist(){
+  const inp=document.getElementById("newArtistName");
+  const name=inp?.value.trim();
+  if(!name)return;
+  const id=name.toLowerCase().replace(/[^a-z0-9]/g,"_");
+  if(!id)return;
+  const artists=_getArtists();
+  if(artists.find(a=>a.id===id)){alert("Artist with this ID already exists");return;}
+  const key=_generateKey(12);
+  const hash=await sha256(key);
+  // Add to USERS
+  USERS[id]={hash,display:name,role:"artist"};
+  // Add to artists list in state
+  const newArtists=[...artists,{id,display:name}];
+  if(!state.__users)state.__users={};
+  state.__users[id]={hash,display:name,role:"artist"};
+  state.__artists=newArtists;
+  saveState(state);
+  inp.value="";
+  // Show generated key
+  document.getElementById("generatedKeyBox").innerHTML=`<div class="generated-key"><code>${key}</code><button onclick="navigator.clipboard.writeText('${key}');this.textContent='Copied!'">Copy</button></div><div style="color:#8b949e;font-size:11px;margin-top:4px">Save this key — it won't be shown again. ${esc(name)} uses it to log in.</div>`;
+  // Refresh artist list
+  const list=document.getElementById("artistList");
+  if(list){
+    let lhtml="";
+    newArtists.forEach((a,i)=>{
+      lhtml+=`<div class="artist-row"><div class="artist-dot" style="background:${_artistColor(a.id)}"></div><span class="artist-name">${esc(a.display)}</span><span class="artist-role">artist</span><button class="artist-del" onclick="removeArtist(${i})" title="Remove">&times;</button></div>`;
+    });
+    list.innerHTML=lhtml;
+  }
+  render();
+}
+function removeArtist(idx){
+  const artists=_getArtists();
+  const a=artists[idx];
+  if(!a)return;
+  if(!confirm("Remove artist "+a.display+"?"))return;
+  artists.splice(idx,1);
+  state.__artists=artists;
+  if(state.__users)delete state.__users[a.id];
+  delete USERS[a.id];
+  saveState(state);
+  closeArtistManager();
+  openArtistManager();
+  render();
+}
+
 function getAdminNote(id){return state[id]?.adminNote||"";}
 function getChat(id){return state[id]?.artistNotes||[];}
 function getAssignee(id){return state[id]?.assignee||"";}
@@ -2064,7 +2182,7 @@ function render(){
       const assignCls=r.assignee?" assign-"+r.assignee:"";
       const an=getAdminNote(r.id);
       const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
-      const artistOpts=ARTISTS.map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
+      const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
       // [0]=prio [1]=# [2]=ID [3]=gif(skip) [4]=desc [5]=cat [6]=tcIn [7]=tcOut [8]=artist [9]=status [10]=admin [11]=chat
       const prio=getPriority(r.id);const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
       if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box)box.className=prioTagClass;}
@@ -2089,7 +2207,7 @@ function _buildRow(r){
   const assignCls=r.assignee?" assign-"+r.assignee:"";
   const an=getAdminNote(r.id);
   const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
-  const artistOpts=ARTISTS.map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
+  const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
   const prio=getPriority(r.id);
   const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
   const rowPrioClass=prio?'row-prio-'+prio:'';
