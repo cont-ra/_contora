@@ -304,7 +304,7 @@
   .note-cell { cursor: pointer; padding: 6px 8px; border-radius: 6px; font-size: 11px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; border-left: 3px solid #58a6ff; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
   .note-cell:hover { border-color: #30363d; border-left-color: #58a6ff; }
   .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); }
-  .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+  .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-height: 60px; }
   .chat-preview-line { display: flex; gap: 4px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
   .chat-preview-line .cp-author { font-size: 10px; font-weight: 600; flex-shrink: 0; }
   .chat-preview-line .cp-author.r-admin { color: #f85149; }
@@ -342,7 +342,7 @@
   .note-cancel-btn:hover { background: #30363d; }
 
   /* Chat messages */
-  .chat-messages { flex: 1; overflow-y: auto; margin-bottom: 12px; }
+  .chat-messages { flex: 1; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; justify-content: flex-end; }
   .chat-empty { color: #484f58; font-style: italic; padding: 20px 0; text-align: center; }
   .chat-msg { position: relative; padding: 10px 14px; border-radius: 10px; margin-bottom: 8px; max-width: 85%; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .chat-msg.from-admin { background: #2a0000; color: #f85149; margin-left: auto; border-bottom-right-radius: 3px; }
