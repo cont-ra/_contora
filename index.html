@@ -46,7 +46,6 @@
   .add-artist-form { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
   .add-artist-form input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; flex: 1; }
   .add-artist-form input:focus { border-color: #1f6feb; outline: none; }
-  .add-artist-form select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 6px 10px; border-radius: 6px; font-size: 13px; -webkit-appearance: none; appearance: none; }
   .user-regen { background: none; border: none; color: #484f58; cursor: pointer; font-size: 13px; padding: 2px 4px; flex-shrink: 0; }
   .user-regen:hover { color: #d29922; }
   .generated-key { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 8px; }
@@ -845,7 +844,7 @@ function openUserManager(){
   ov.onclick=(e)=>{if(e.target===ov)closeUserManager();};
   let html=`<div class="admin-modal"><div class="admin-modal-header"><h3>Manage Users</h3><button class="admin-modal-close" onclick="closeUserManager()">&times;</button></div><div class="admin-modal-body">`;
   html+=`<div id="userList">${_renderUserList()}</div>`;
-  html+=`<div class="add-artist-form"><input type="text" id="newUserName" placeholder="Name..."><select id="newUserRole"><option value="artist">Artist</option><option value="admin">Admin</option><option value="client">Client</option></select><button class="files-btn primary" onclick="addUser()">+ Add</button></div>`;
+  html+=`<div class="add-artist-form"><input type="text" id="newUserName" placeholder="New artist name..." onkeydown="if(event.key==='Enter')addUser()"><button class="files-btn" onclick="addUser()">+ Add</button></div>`;
   html+=`<div id="generatedKeyBox"></div>`;
   html+=`</div></div>`;
   ov.innerHTML=html;
@@ -858,11 +857,15 @@ function _renderUserList(){
     const key=state.__users?.[id]?.plainKey||"";
     const roleColors={admin:"#f97583",artist:"#79c0ff",client:"#7ee787"};
     const rc=roleColors[u.role]||"#8b949e";
-    const roleOpts=["admin","artist","client"].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join("");
     html+=`<div class="artist-row">`;
     html+=`<div class="artist-dot" style="background:${rc}"></div>`;
     html+=`<span class="artist-name">${esc(u.display)}</span>`;
-    html+=`<select class="user-role-select" onchange="changeUserRole('${id}',this.value)" style="background:#0d1117;border:1px solid #30363d;color:${rc};padding:2px 6px;border-radius:4px;font-size:11px;text-transform:uppercase">${roleOpts}</select>`;
+    if(u.role==='admin'){
+      html+=`<span style="color:${rc};font-size:11px;text-transform:uppercase;font-weight:600">admin</span>`;
+    } else {
+      const roleOpts=["artist","client"].map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join("");
+      html+=`<select class="user-role-select" onchange="changeUserRole('${id}',this.value)" style="background:#0d1117;border:1px solid #30363d;color:${rc};padding:2px 6px;border-radius:4px;font-size:11px;text-transform:uppercase">${roleOpts}</select>`;
+    }
     if(key){
       html+=`<code class="user-key" onclick="navigator.clipboard.writeText('${key}');this.style.color='#3fb950';setTimeout(()=>this.style.color='',800)" title="Click to copy">${key}</code>`;
     } else {
@@ -882,9 +885,8 @@ function _generateKey(len){
 }
 async function addUser(){
   const inp=document.getElementById("newUserName");
-  const roleEl=document.getElementById("newUserRole");
   const name=inp?.value.trim();
-  const role=roleEl?.value||"artist";
+  const role="artist";
   if(!name)return;
   const id=name.toLowerCase().replace(/[^a-z0-9]/g,"_");
   if(!id)return;
