@@ -1739,14 +1739,17 @@ function renderChat(){
     const isAdm=m.author==="admin",isCli=m.author==="client",cls=isAdm?"from-admin":isCli?"from-client":"from-artist";
     const del=m.deleted;
     html+=`<div class="chat-msg ${cls}${del?' deleted':''}" data-mid="${m.id}">`;
-    if(!del&&!isGuest()){
+    if(!isGuest()){
       const isOwn=(isAdmin()&&m.author==="admin")||(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
-      html+=`<div class="chat-msg-actions">`;
-      // Reply — anyone logged in, to any message including own
-      if(canSend) html+=`<div class="chat-action-btn" onclick="replyTo(${m.id})" title="Reply">↩</div>`;
-      if(isOwn) html+=`<div class="chat-action-btn" onclick="editMsg(${m.id})" title="Edit">✎</div>`;
-      if(isAdmin()||isOwn) html+=`<div class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete">✕</div>`;
-      html+=`</div>`;
+      if(!del){
+        html+=`<div class="chat-msg-actions">`;
+        if(canSend) html+=`<div class="chat-action-btn" onclick="replyTo(${m.id})" title="Reply">↩</div>`;
+        if(isOwn) html+=`<div class="chat-action-btn" onclick="editMsg(${m.id})" title="Edit">✎</div>`;
+        if(isAdmin()||isOwn) html+=`<div class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete">✕</div>`;
+        html+=`</div>`;
+      } else if(del&&isAdmin()){
+        html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="deleteMsg(${m.id})" title="Delete permanently" style="color:#f85149">✕</div></div>`;
+      }
     }
     const timeStr=m.ts?new Date(m.ts).toLocaleString('uk-UA',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
     const authorName=isAdm?'Admin':isCli?'Client':'Artist';
