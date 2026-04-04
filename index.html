@@ -731,7 +731,40 @@ const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
 const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
 const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json","Prefer":"return=minimal"};
 let _saving=false,_pendingSave=false;
-(async function(){const s=sessionStorage.getItem("kh_user");if(s==="guest")guestLogin();else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}})();
+function _tryAuthLink(){
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('auth');
+  if(!token)return false;
+  // Clean URL
+  window.history.replaceState({},'',window.location.pathname);
+  // Find user by linkToken
+  if(!state.__users)return false;
+  for(const[id,u] of Object.entries(state.__users)){
+    if(u.linkToken===token){
+      if(!USERS[id])USERS[id]=u;
+      currentUser={id,...USERS[id]};
+      sessionStorage.setItem("kh_user",id);
+      showLoggedIn();
+      return true;
+    }
+  }
+  return false;
+}
+(async function(){
+  // First try auth link (need state from server)
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('auth')){
+    // Pull state first to get linkTokens
+    const localState=loadState();
+    if(localState)state=localState;
+    await _pullRemote();
+    if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+    if(_tryAuthLink())return;
+  }
+  const s=sessionStorage.getItem("kh_user");
+  if(s==="guest")guestLogin();
+  else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}
+})();
 
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
 
@@ -925,6 +958,10 @@ function _renderUserList(){
       html+=`<code class="user-key" style="color:#484f58;cursor:default">••••••</code>`;
     }
     html+=`<button class="user-regen" onclick="regenKey('${id}')" title="Generate new key">🔄</button>`;
+    const lt=state.__users?.[id]?.linkToken;
+    if(lt){
+      html+=`<button class="user-regen" onclick="copyAuthLink('${id}')" title="Copy login link">🔗</button>`;
+    }
     html+=`<button class="artist-del" onclick="removeUser('${id}')" title="Remove">&times;</button>`;
     html+=`</div>`;
   });
@@ -984,9 +1021,10 @@ async function addUser(){
   if(USERS[id]){alert("User with this ID already exists");return;}
   const key=_generateKey(12);
   const hash=await sha256(key);
+  const linkToken=_generateKey(24);
   USERS[id]={hash,display:name,role};
   if(!state.__users)state.__users={};
-  state.__users[id]={hash,display:name,role,plainKey:key};
+  state.__users[id]={hash,display:name,role,plainKey:key,linkToken};
   if(role==="artist"){
     const artists=_getArtists();
     artists.push({id,display:name});
@@ -1002,11 +1040,13 @@ async function regenKey(id){
   if(!USERS[id])return;
   const key=_generateKey(12);
   const hash=await sha256(key);
+  const linkToken=_generateKey(24);
   USERS[id].hash=hash;
   if(!state.__users)state.__users={};
   if(!state.__users[id])state.__users[id]={...USERS[id]};
   state.__users[id].hash=hash;
   state.__users[id].plainKey=key;
+  state.__users[id].linkToken=linkToken;
   saveState(state);
   document.getElementById("userList").innerHTML=_renderUserList();
 }
@@ -1022,6 +1062,15 @@ function changeUserRole(id,role){
   saveState(state);
   document.getElementById("userList").innerHTML=_renderUserList();
   render();
+}
+function copyAuthLink(id){
+  const lt=state.__users?.[id]?.linkToken;
+  if(!lt)return;
+  const url=window.location.origin+window.location.pathname+'?auth='+lt;
+  navigator.clipboard.writeText(url);
+  // Flash feedback
+  const btn=event.target;
+  const orig=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=orig,800);
 }
 function removeUser(id){
   if(id===currentUser?.id){alert("Cannot remove yourself");return;}
