@@ -1253,7 +1253,7 @@ function openShotInfoModal(id){
   if(canEdit){
     const inputs=ov.querySelectorAll('.si-input');
     inputs.forEach(inp=>_attachSiDropdown(inp,SI_OPTIONS[inp.dataset.f]||[]));
-    inputs[0]?.focus();
+    // Don't auto-focus to avoid opening dropdown immediately
     // Enter to save
     inputs.forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveShotInfoModal(id);}if(e.key==='Escape')closeShotInfoModal();}));
   }
