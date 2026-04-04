@@ -301,12 +301,18 @@
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
   .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
   .assign-igor { border-color: #3fb950; color: #3fb950; }
-  .note-cell { cursor: pointer; padding: 4px 10px; border-radius: 6px; font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #0d1117; border: 1px solid #30363d; color: #484f58; display: block; text-align: left; transition: 0.15s; }
-  .note-cell:hover { border-color: #484f58; color: #c9d1d9; }
-  .note-cell.has-text { color: #c9d1d9; border-color: #484f58; }
+  .note-cell { cursor: pointer; padding: 6px 10px; border-radius: 6px; font-size: 11px; min-width: 140px; max-width: 220px; background: #0d1117; border: 1px solid #21262d; color: #484f58; display: block; text-align: left; transition: 0.15s; }
+  .note-cell:hover { border-color: #484f58; }
+  .note-cell.has-text { border-color: #30363d; }
   .note-cell.type-admin { border-left: 3px solid #f85149; }
   .note-cell.type-artist { border-left: 3px solid #58a6ff; }
-  .note-cell .msg-count { font-size: 10px; color: #58a6ff; margin-left: 4px; }
+  .note-cell .msg-count { font-size: 10px; color: #58a6ff; }
+  .chat-preview-line { display: flex; gap: 4px; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+  .chat-preview-line .cp-author { font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .chat-preview-line .cp-author.r-admin { color: #f85149; }
+  .chat-preview-line .cp-author.r-client { color: #d29922; }
+  .chat-preview-line .cp-author.r-artist { color: #58a6ff; }
+  .chat-preview-line .cp-text { color: #8b949e; overflow: hidden; text-overflow: ellipsis; }
 
   /* Fullscreen note overlay */
   .note-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: stretch; justify-content: center; padding: 40px; }
@@ -1578,7 +1584,7 @@ function saveShotInfoModal(id){
   render();
 }
 function nextMsgId(tid){const msgs=getChat(tid);return msgs.length?Math.max(...msgs.map(m=>m.id||0))+1:1;}
-function chatPreview(id){const msgs=getChat(id).filter(m=>!m.deleted);if(!msgs.length)return{text:"",count:0};return{text:msgs[msgs.length-1].text,count:msgs.length};}
+function chatPreview(id){const msgs=getChat(id).filter(m=>!m.deleted);if(!msgs.length)return{text:"",count:0,lines:[]};const last=msgs.slice(-4);const lines=last.map(m=>{const a=m.author==='admin'?'A':m.author==='client'?'C':'Art';return{author:a,text:trunc(m.text,30),role:m.author};});return{text:msgs[msgs.length-1].text,count:msgs.length,lines};}
 
 function updateStats(){let c={todo:0,progress:0,review:0,done:0,skip:0};TASKS.forEach(t=>{c[getStatus(t.id)]++;});document.getElementById("stat-todo").textContent=c.todo;document.getElementById("stat-progress").textContent=c.progress;document.getElementById("stat-review").textContent=c.review;document.getElementById("stat-done").textContent=c.done;}
 
@@ -2935,7 +2941,7 @@ function render(){
       if(cells[7]){const sel=cells[7].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
       if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
       if(cells[9]&&!cells[9].querySelector('.desc-edit-ta'))cells[9].innerHTML=an||'<span style="color:#484f58">...</span>';
-      if(cells[10])cells[10].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div>`;
+      if(cells[10])cells[10].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cp.lines.length?cp.lines.map(l=>`<div class="chat-preview-line"><span class="cp-author r-${l.role}">${l.author}</span><span class="cp-text">${esc(l.text)}</span></div>`).join('')+(cp.count>4?`<span class="msg-count">+${cp.count-4} more</span>`:''):'<span style="color:#484f58">...</span>'}</div>`;
     });
   }
   updateStats();
@@ -2966,7 +2972,7 @@ function _buildRow(r){
       <option value="review" ${st==="review"?"selected":""}>Review</option><option value="done" ${st==="done"?"selected":""}>Done</option>
       <option value="skip" ${st==="skip"?"selected":""}>Skip</option></select></td>
     <td class="desc-cell admin-col${canEditAdminNote()?' editable':''}" ${canEditAdminNote()?`onclick="startEditAdmin('${r.id}',this,event)"`:''} data-tid="${r.id}">${an||'<span style="color:#484f58">...</span>'}</td>
-    <td><div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div></td>
+    <td><div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cp.lines.length?cp.lines.map(l=>`<div class="chat-preview-line"><span class="cp-author r-${l.role}">${l.author}</span><span class="cp-text">${esc(l.text)}</span></div>`).join('')+(cp.count>4?`<span class="msg-count">+${cp.count-4} more</span>`:''):'<span style="color:#484f58">...</span>'}</div></td>
   </tr>`;
 }
 
