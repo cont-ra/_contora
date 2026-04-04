@@ -451,7 +451,7 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   render();
 }
 function logout(){sessionStorage.removeItem("kh_user");currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
-(async function(){const s=sessionStorage.getItem("kh_user");if(s==="guest")guestLogin();else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}})();
+// Auto-login deferred until after SUPA_URL is defined (see below)
 
 function isAdmin(){return currentUser&&currentUser.role==="admin";}
 function isArtist(){return currentUser&&currentUser.role==="artist";}
@@ -593,6 +593,7 @@ const SUPA_URL="https://cysomcrwjkszsizgkgaf.supabase.co";
 const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5c29tY3J3amtzenNpemdrZ2FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDI2MTMsImV4cCI6MjA5MDc3ODYxM30.Wmz0fog7GGkqcVX8kGXR54DxsiKekr4ksHha24Odohs";
 const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json","Prefer":"return=minimal"};
 let _saving=false,_pendingSave=false;
+(async function(){const s=sessionStorage.getItem("kh_user");if(s==="guest")guestLogin();else if(s&&USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}})();
 
 function loadState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch{return {};}}
 
