@@ -55,7 +55,23 @@
   tbody tr { border-bottom: 1px solid #21262d; transition: 0.1s; }
   tbody tr:hover { background: #1c2128; }
   tbody td { padding: 10px 14px; font-size: 14px; vertical-align: top; }
-  td.id-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: #58a6ff; white-space: nowrap; }
+  td.id-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: #58a6ff; white-space: nowrap; cursor: pointer; }
+  td.id-cell:hover { text-decoration: underline; }
+  .shot-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2500; display: flex; align-items: center; justify-content: center; }
+  .shot-overlay.hidden { display: none; }
+  .shot-panel { width: 90vw; max-width: 1200px; max-height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .shot-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; }
+  .shot-header-id { font-family: 'SF Mono', monospace; font-size: 18px; color: #58a6ff; font-weight: 600; }
+  .shot-header-desc { color: #8b949e; font-size: 14px; flex: 1; }
+  .shot-header-tc { font-family: 'SF Mono', monospace; font-size: 12px; color: #8b949e; }
+  .shot-close { background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer; padding: 0 4px; }
+  .shot-close:hover { color: #fff; }
+  .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; }
+  .shot-media-card { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; overflow: hidden; cursor: pointer; transition: 0.15s; }
+  .shot-media-card:hover { border-color: #58a6ff; transform: scale(1.02); }
+  .shot-media-card img { display: block; width: 320px; height: auto; }
+  .shot-media-label { padding: 8px 12px; font-size: 12px; color: #8b949e; display: flex; align-items: center; gap: 6px; }
+  .shot-media-label .play-icon { color: #3fb950; }
   td.tc-cell { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #8b949e; white-space: nowrap; }
   td.desc-cell { max-width: 400px; word-break: break-word; white-space: normal; }
   td.gif-cell { width: 80px; padding: 6px; }
@@ -267,6 +283,19 @@
   </div>
 </div>
 
+<div class="shot-overlay hidden" id="shotOverlay" onclick="if(event.target===this)closeShot()">
+  <div class="shot-panel">
+    <div class="shot-header">
+      <span class="shot-header-id" id="shotId"></span>
+      <span id="shotCatTag"></span>
+      <span class="shot-header-desc" id="shotDesc"></span>
+      <span class="shot-header-tc" id="shotTC"></span>
+      <button class="shot-close" onclick="closeShot()">&times;</button>
+    </div>
+    <div class="shot-body" id="shotBody"></div>
+  </div>
+</div>
+
 <div class="gif-overlay hidden" id="gifOverlay" onclick="if(event.target===this)closeGif()">
   <button class="gif-close-btn" onclick="closeGif()">&times;</button>
   <div class="gif-player-area" id="gifPlayerArea">
@@ -389,7 +418,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.2</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.3</div>
 
 <script>
 const USERS = {
@@ -931,6 +960,7 @@ function saveNote(){
 }
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("noteOverlay").classList.contains("hidden"))closeNote();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();});
 
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
@@ -1508,6 +1538,32 @@ document.addEventListener("keydown",e=>{
 function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function trunc(s,n){return !s?"":s.length>n?s.substring(0,n)+"...":s;}
 
+// --- SHOT DETAIL ---
+function openShot(id){
+  const task=TASKS.find(t=>t.id===id);
+  if(!task)return;
+  const cat=getCat(id);
+  document.getElementById("shotId").textContent=id;
+  document.getElementById("shotCatTag").innerHTML=_catTagHtml(cat);
+  document.getElementById("shotDesc").textContent=getDesc(id,task.desc);
+  document.getElementById("shotTC").textContent=task.tcIn+" → "+task.tcOut;
+  const body=document.getElementById("shotBody");
+  let html="";
+  if(hasGif(id)){
+    html+=`<div class="shot-media-card" onclick="closeShot();openGif('${id}')">
+      <img src="${CDN_BASE}/thumbs/${id}.jpg" alt="${id}">
+      <div class="shot-media-label"><span class="play-icon">▶</span> Preview Video</div>
+    </div>`;
+  } else {
+    html+=`<div style="color:#484f58;font-size:14px;padding:20px">No media available for this shot.</div>`;
+  }
+  body.innerHTML=html;
+  document.getElementById("shotOverlay").classList.remove("hidden");
+}
+function closeShot(){
+  document.getElementById("shotOverlay").classList.add("hidden");
+}
+
 // --- RENDER TABLE ---
 function render(){
   const tbody=document.getElementById("tbody");
@@ -1560,7 +1616,7 @@ function _buildRow(r){
   const artistOpts=ARTISTS.map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
   return `<tr>
     <td style="color:#484f58">${r.idx}</td>
-    <td class="id-cell">${r.id}</td>
+    <td class="id-cell" onclick="openShot('${r.id}')">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
     <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
