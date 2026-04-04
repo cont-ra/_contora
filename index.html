@@ -386,6 +386,11 @@
   .chat-send-btn { background: #1f6feb; border: none; color: #fff; width: 42px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   .chat-send-btn:hover { background: #388bfd; }
   .chat-hint { font-size: 11px; color: #484f58; margin-top: 6px; }
+  .chat-paste-preview { position: relative; margin-top: 6px; max-width: 200px; border-radius: 6px; overflow: hidden; border: 1px solid #30363d; }
+  .chat-paste-preview.hidden { display: none; }
+  .chat-paste-preview img { display: block; max-width: 100%; max-height: 150px; }
+  .chat-msg-img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 4px; cursor: pointer; border: 1px solid #21262d; }
+  .chat-msg-img:hover { border-color: #58a6ff; }
   .chat-todo-btn { background: none; border: 1px solid #30363d; color: #484f58; width: 42px; height: 42px; border-radius: 8px; cursor: pointer; font-size: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: 0.15s; }
   .chat-todo-btn:hover { border-color: #484f58; color: #c9d1d9; }
   .chat-todo-btn.active { border-color: #3fb950; color: #3fb950; background: #0a1f0a; }
@@ -1764,6 +1769,7 @@ function renderChat(){
       if(isAdmin()) html+=`<button class="chat-restore-btn" onclick="restoreMsg(${m.id})">restore</button>`;
     } else {
       html+=renderMsgContent(m.text, m.id);
+      if(m.img)html+=`<img class="chat-msg-img" src="${esc(m.img)}" onclick="window.open('${esc(m.img)}','_blank')">`;
       if(m.edited) html+=`<div class="chat-edited-mark">edited</div>`;
     }
     html+=`</div>`;
@@ -1773,7 +1779,8 @@ function renderChat(){
     html+=`<div class="chat-input-area">`;
     html+=`<div class="chat-editing-hint${editingMsgId!==null?'':' hidden'}" id="chatEditHint"><span>Editing message...</span><button class="chat-editing-close" onclick="cancelEdit()">&times;</button></div>`;
     html+=`<div class="chat-reply-preview hidden" id="chatReplyPreview"><span id="chatReplyText"></span><button class="chat-reply-close" onclick="cancelReply()">&times;</button></div>`;
-    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Enter to send, Shift+Enter for new line...'}" rows="1"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
+    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><button class="chat-todo-btn" onclick="document.getElementById('chatFileInput').click()" title="Attach image">&#128206;</button><input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="chatAttachFile(this)"><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Paste image or type...'}" rows="1"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
+    html+=`<div class="chat-paste-preview hidden" id="chatPastePreview"><img id="chatPasteImg"><button onclick="cancelPaste()" style="position:absolute;top:4px;right:4px;background:#21262d;border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px">&times;</button></div>`;
     html+=`<div class="chat-hint">${todoMode?'Todo mode: each Shift+Enter = new item &nbsp;|&nbsp; Enter — send list':'Enter — send &nbsp;|&nbsp; Shift+Enter — new line &nbsp;|&nbsp; &#9745; — todo builder'}</div>`;
     html+=`</div>`;
   }
@@ -1800,10 +1807,52 @@ function renderChat(){
       }
     });
     ta.addEventListener("input",()=>{ta.style.height="auto";ta.style.height=Math.min(ta.scrollHeight,150)+"px";});
+    ta.addEventListener("paste",e=>{
+      const items=e.clipboardData?.items;
+      if(!items)return;
+      for(const item of items){
+        if(item.type.startsWith('image/')){
+          e.preventDefault();
+          const file=item.getAsFile();
+          if(file){_chatPendingFile=file;_showPastePreview(file);}
+          return;
+        }
+      }
+    });
     ta.focus();
   }
 }
 
+// --- CHAT IMAGE ATTACH ---
+let _chatPendingFile=null;
+function chatAttachFile(input){
+  const file=input.files[0];
+  if(!file||!file.type.startsWith('image/'))return;
+  _chatPendingFile=file;
+  _showPastePreview(file);
+  input.value='';
+}
+function _showPastePreview(file){
+  const preview=document.getElementById('chatPastePreview');
+  const img=document.getElementById('chatPasteImg');
+  if(!preview||!img)return;
+  const url=URL.createObjectURL(file);
+  img.src=url;
+  preview.classList.remove('hidden');
+}
+function cancelPaste(){
+  _chatPendingFile=null;
+  const preview=document.getElementById('chatPastePreview');
+  if(preview)preview.classList.add('hidden');
+}
+async function _uploadChatImage(file){
+  const ts=Date.now();
+  const ext=file.name?.split('.').pop()||'png';
+  const key=`chat/${noteTaskId}/img_${ts}.${ext}`;
+  const ok=await r2UploadXHR(key,file,()=>{});
+  if(!ok)return null;
+  return CDN_BASE+'/'+key;
+}
 function toggleTodoMode(){
   const ta=document.getElementById("chatTA");
   const savedText=ta?ta.value:'';
@@ -1823,9 +1872,18 @@ function toggleTodoMode(){
   },50);
 }
 
-function sendChat(){
+async function sendChat(){
   const ta=document.getElementById("chatTA");if(!ta)return;
-  let text=ta.value.trim();if(!text)return;
+  let text=ta.value.trim();
+  let imgUrl=null;
+  // Upload pending image
+  if(_chatPendingFile){
+    imgUrl=await _uploadChatImage(_chatPendingFile);
+    _chatPendingFile=null;
+    const preview=document.getElementById('chatPastePreview');
+    if(preview)preview.classList.add('hidden');
+  }
+  if(!text&&!imgUrl)return;
   // Convert visual ○/● back to - [ ]/- [x], and auto-prefix plain lines in todo mode
   if(todoMode){
     text=text.split('\n').map(l=>{
@@ -1849,6 +1907,7 @@ function sendChat(){
   } else {
     const author=isAdmin()?"admin":isClient()?"client":"artist";
     const msg={id:nextMsgId(noteTaskId),author,text,replyTo:replyToId,ts:Date.now()};
+    if(imgUrl)msg.img=imgUrl;
     state[noteTaskId].artistNotes.push(msg);
   }
   replyToId=null;
