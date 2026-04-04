@@ -764,7 +764,9 @@ function setPriority(id,val){
   closePrioDropdown();
   render();
 }
+function canEditPrio(){return isAdmin()||isClient();}
 function openPrioDropdown(id,el){
+  if(!canEditPrio())return;
   closePrioDropdown();
   const cur=getPriority(id);
   const rect=el.getBoundingClientRect();
@@ -2091,8 +2093,10 @@ function _buildRow(r){
   const prio=getPriority(r.id);
   const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
   const rowPrioClass=prio?'row-prio-'+prio:'';
+  const prioClick=canEditPrio()?`onclick="event.stopPropagation();openPrioDropdown('${r.id}',this)"`:'';
+  const prioStyle=canEditPrio()?'':'style="cursor:default"';
   return `<tr class="${rowPrioClass}">
-    <td><div class="${prioTagClass}" onclick="event.stopPropagation();openPrioDropdown('${r.id}',this)"></div></td>
+    <td><div class="${prioTagClass}" ${prioClick} ${prioStyle}></div></td>
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-cell" onclick="openShot('${r.id}')">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
