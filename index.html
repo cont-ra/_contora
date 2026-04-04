@@ -1071,7 +1071,7 @@ function changeUserRole(id,role){
 function copyAuthLink(id){
   const lt=state.__users?.[id]?.linkToken;
   if(!lt)return;
-  const base=window.location.hostname==='localhost'?'https://spark700.github.io/kh-vfx-tracker/':window.location.origin+window.location.pathname;
+  const base='https://worker-fancy-forest-2daf.contora3d.workers.dev/';
   const chunks=lt.match(/.{1,4}/g)||[];
   const ID=id.toUpperCase();
   const encoded=chunks.join('_'+ID+'_');
