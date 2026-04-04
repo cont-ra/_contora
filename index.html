@@ -515,7 +515,6 @@
     <th onclick="sortTable(0)" data-col="0" data-label="#">#</th>
     <th onclick="sortTable(1)" data-col="1" data-label="ID">ID</th>
     <th>Preview</th>
-    <th onclick="sortTable(2)" data-col="2" data-label="Description">Description</th>
     <th>Shot Info</th>
     <th onclick="sortTable(3)" data-col="3" data-label="Category">Category</th>
     <th onclick="sortTable(4)" data-col="4" data-label="TC In">TC In</th>
@@ -2321,21 +2320,16 @@ function render(){
       const an=getAdminNote(r.id);
       const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
       const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
-      // [0]=prio [1]=# [2]=ID [3]=gif(skip) [4]=desc [5]=shotInfo [6]=cat [7]=tcIn [8]=tcOut [9]=artist [10]=status [11]=admin [12]=chat
+      // [0]=prio [1]=# [2]=ID [3]=gif(skip) [4]=shotInfo [5]=cat [6]=tcIn [7]=tcOut [8]=artist [9]=status [10]=admin [11]=chat
       const prio=getPriority(r.id);const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
       if(cells[0]){const box=cells[0].querySelector('.prio-tag');if(box)box.className=prioTagClass;}
       tr.className=prio?'row-prio-'+prio:'';
-      const descHtml=getDesc(r.id,r.desc);
-      if(cells[4]&&cells[4].dataset.tid===r.id){
-        const descTd=cells[4];
-        if(!descTd.querySelector('.desc-edit-ta'))descTd.innerHTML=descHtml;
-      }
-      if(cells[5]&&!cells[5].querySelector('.si-edit'))cells[5].innerHTML=_renderShotInfo(r.id);
-      if(cells[6]){const rc=getCat(r.id);cells[6].innerHTML=isAdmin()?_catTag(r.id,rc):_catTagHtml(rc);}
-      if(cells[9]){const sel=cells[9].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
-      if(cells[10]){const sel=cells[10].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
-      if(cells[11]&&!cells[11].querySelector('.desc-edit-ta'))cells[11].innerHTML=an||'<span style="color:#484f58">...</span>';
-      if(cells[12])cells[12].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div>`;
+      if(cells[4]&&!cells[4].querySelector('.si-edit'))cells[4].innerHTML=_renderShotInfo(r.id);
+      if(cells[5]){const rc=getCat(r.id);cells[5].innerHTML=isAdmin()?_catTag(r.id,rc):_catTagHtml(rc);}
+      if(cells[8]){const sel=cells[8].querySelector('select');if(sel&&sel.value!==r.assignee)sel.value=r.assignee||"";}
+      if(cells[9]){const sel=cells[9].querySelector('select');if(sel&&sel.value!==st){sel.value=st;sel.className="status-select s-"+st;}}
+      if(cells[10]&&!cells[10].querySelector('.desc-edit-ta'))cells[10].innerHTML=an||'<span style="color:#484f58">...</span>';
+      if(cells[11])cells[11].innerHTML=`<div class="note-cell type-artist${cp.text?' has-text':''}" onclick="openNote('${r.id}','chat')">${cpPrev||'...'} ${cp.count?'<span class="msg-count" style="font-size:10px;color:#58a6ff">('+cp.count+')</span>':''}</div>`;
     });
   }
   updateStats();
@@ -2357,7 +2351,6 @@ function _buildRow(r){
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-cell" onclick="openShot('${r.id}')">${r.id}</td>
     <td class="gif-cell">${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/thumbs/${r.id}.jpg" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
-    <td class="desc-cell${canEditDesc()?' editable':''}" ${canEditDesc()?`onclick="startEditDesc('${r.id}',this,event)"`:''} data-tid="${r.id}">${getDesc(r.id,r.desc)}</td>
     <td class="shot-info-cell${isAdmin()?' editable':''}" ${isAdmin()?`onclick="startEditShotInfo('${r.id}',this,event)"`:''} data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
     <td class="category-cell">${isAdmin()?_catTag(r.id,getCat(r.id)):_catTagHtml(getCat(r.id))}</td>
     <td class="tc-cell">${r.tcIn}</td>
