@@ -301,8 +301,8 @@
   .status-select.s-skip { border-color: #484f58; color: #484f58; }
   .assign-nikita { border-color: #58a6ff; color: #58a6ff; }
   .assign-igor { border-color: #3fb950; color: #3fb950; }
-  .note-cell { cursor: pointer; padding: 0; border-radius: 6px; font-size: 11px; min-width: 180px; max-width: 300px; background: none; border: none; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; }
-  .note-cell:hover { color: #c9d1d9; }
+  .note-cell { cursor: pointer; padding: 6px 8px; border-radius: 6px; font-size: 11px; min-width: 180px; max-width: 300px; background: #0d1117; border: 1px solid #21262d; border-left: 3px solid #58a6ff; color: #484f58; display: block; text-align: left; transition: 0.15s; position: relative; overflow: hidden; height: 100%; box-sizing: border-box; }
+  .note-cell:hover { border-color: #30363d; border-left-color: #58a6ff; }
   .note-cell.has-text .chat-preview-fade { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); mask-image: linear-gradient(to bottom, transparent 0%, #000 40%); }
   .chat-preview-fade { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
   .chat-preview-line { display: flex; gap: 4px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
@@ -310,6 +310,7 @@
   .chat-preview-line .cp-author.r-admin { color: #f85149; }
   .chat-preview-line .cp-author.r-client { color: #d29922; }
   .chat-preview-line .cp-author.r-artist { color: #58a6ff; }
+  .chat-preview-line .cp-author.r-note { color: #3fb950; }
   .chat-preview-line .cp-text { color: #8b949e; overflow: hidden; text-overflow: ellipsis; }
 
   /* Fullscreen note overlay */
@@ -1582,7 +1583,19 @@ function saveShotInfoModal(id){
   render();
 }
 function nextMsgId(tid){const msgs=getChat(tid);return msgs.length?Math.max(...msgs.map(m=>m.id||0))+1:1;}
-function chatPreview(id){const msgs=getChat(id).filter(m=>!m.deleted);if(!msgs.length)return{text:"",count:0,lines:[]};const last=msgs.slice(-8);const lines=last.map(m=>{const a=m.author==='admin'?'A':m.author==='client'?'C':'Art';return{author:a,text:trunc(m.text,35),role:m.author};});return{text:msgs[msgs.length-1].text,count:msgs.length,lines};}
+function chatPreview(id){
+  const chatMsgs=getChat(id).filter(m=>!m.deleted).map(m=>({...m,_pn:false}));
+  const pn=_collectPlayerNotes(id).map(n=>({...n,_pn:true}));
+  const all=[...chatMsgs,...pn].sort((a,b)=>(a.ts||0)-(b.ts||0));
+  if(!all.length)return{text:"",count:0,lines:[]};
+  const last=all.slice(-8);
+  const lines=last.map(m=>{
+    if(m._pn){return{author:m.tc||'📌',text:trunc(m.text||'(drawing)',35),role:'note'};}
+    const a=m.author==='admin'?'A':m.author==='client'?'C':'Art';
+    return{author:a,text:trunc(m.text,35),role:m.author};
+  });
+  return{text:all[all.length-1].text||'',count:all.length,lines};
+}
 
 function updateStats(){let c={todo:0,progress:0,review:0,done:0,skip:0};TASKS.forEach(t=>{c[getStatus(t.id)]++;});document.getElementById("stat-todo").textContent=c.todo;document.getElementById("stat-progress").textContent=c.progress;document.getElementById("stat-review").textContent=c.review;document.getElementById("stat-done").textContent=c.done;}
 
