@@ -483,7 +483,7 @@ function openCatDropdown(id,el){
   dd.style.top=(rect.bottom+4)+"px";dd.style.left=rect.left+"px";dd.style.position="fixed";
   _renderCatDropdownItems(dd,id,cat,keys,false);
   document.body.appendChild(dd);
-  setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);
+  setTimeout(()=>document.addEventListener("mousedown",_closeCatOnClick,{once:true,capture:true}),10);
 }
 function _renderCatDropdownItems(dd,id,cat,keys,editMode){
   let html=keys.map(k=>{
@@ -503,14 +503,18 @@ function toggleCatEdit(id){
   const cat=getCat(id);
   const keys=getAllCatKeys();
   _renderCatDropdownItems(dd,id,cat,keys,_catEditMode);
-  setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);
+  setTimeout(()=>document.addEventListener("mousedown",_closeCatOnClick,{once:true,capture:true}),10);
 }
 function _closeCatOnClick(e){
   const dd=document.getElementById("catDropdown");
-  if(dd&&!dd.contains(e.target)){closeCatDropdown();}
-  else if(dd){setTimeout(()=>document.addEventListener("click",_closeCatOnClick,{once:true}),10);}
+  if(!dd)return;
+  if(!dd.contains(e.target)){closeCatDropdown();}
+  else{document.addEventListener("mousedown",_closeCatOnClick,{once:true,capture:true});}
 }
-function closeCatDropdown(){const dd=document.getElementById("catDropdown");if(dd)dd.remove();_catEditMode=false;}
+function closeCatDropdown(){
+  document.removeEventListener("mousedown",_closeCatOnClick,{capture:true});
+  const dd=document.getElementById("catDropdown");if(dd)dd.remove();_catEditMode=false;
+}
 function addNewCat(id,name){
   if(!name||!name.trim())return;
   const key=name.trim().toLowerCase().replace(/[^a-zа-яёіїє0-9]/gi,"_");
