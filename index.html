@@ -242,7 +242,7 @@
   td.desc-cell.editable:hover { background: #1c2128; outline: 1px solid #30363d; }
   .shot-info-cell { font-size: 13px; color: #8b949e; cursor: pointer; min-width: 300px; vertical-align: top !important; padding-top: 32px !important; }
   .shot-info-cell:hover { color: #c9d1d9; }
-  .si-tooltip { position: fixed; background: rgba(22,27,34,0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(48,54,61,0.6); border-radius: 10px; padding: 16px 20px; z-index: 5000; pointer-events: none; min-width: 340px; max-width: 420px; transition: top 0.4s ease-out, left 0.4s ease-out, opacity 0.3s; }
+  .si-tooltip { position: fixed; background: rgba(22,27,34,0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(48,54,61,0.6); border-radius: 10px; padding: 16px 20px; z-index: 5000; pointer-events: none; min-width: 340px; max-width: 420px; transition: opacity 0.3s; }
   .si-tooltip.pinned { background: #161b22; opacity: 1 !important; pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
   .si-tooltip .si-tt-title { font-size: 13px; color: #58a6ff; font-weight: 600; margin-bottom: 10px; font-family: 'SF Mono', monospace; }
   .si-tooltip .si-tt-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #21262d; }
@@ -1434,7 +1434,18 @@ function _attachSiDropdown(input,options,dynamicFn){
   input.addEventListener("blur",()=>setTimeout(close,150));
 }
 // --- SHOT INFO TOOLTIP ---
-let _siTooltipPinned=false;
+let _siTooltipPinned=false,_siTargetX=0,_siTargetY=0,_siCurX=0,_siCurY=0,_siRaf=null;
+function _siLerp(){
+  const tt=document.getElementById('siTooltip');
+  if(!tt||_siTooltipPinned){_siRaf=null;return;}
+  _siCurX+=(_siTargetX-_siCurX)*0.12;
+  _siCurY+=(_siTargetY-_siCurY)*0.12;
+  tt.style.left=Math.round(_siCurX)+'px';
+  tt.style.top=Math.round(_siCurY)+'px';
+  if(Math.abs(_siTargetX-_siCurX)>0.5||Math.abs(_siTargetY-_siCurY)>0.5){
+    _siRaf=requestAnimationFrame(_siLerp);
+  } else { _siRaf=null; }
+}
 function _siTooltipHtml(id){
   const si=getShotInfo(id);
   const fields=[
@@ -1447,21 +1458,17 @@ function _siTooltipHtml(id){
   if(!rows)rows='<div style="color:#484f58;font-size:12px">No data</div>';
   return`<div class="si-tt-title">${id}</div>${rows}`;
 }
-function _clampTooltip(tt,x,y){
-  const pad=60;
-  let left=x+pad;
-  let top=y;
-  requestAnimationFrame(()=>{
-    const r=tt.getBoundingClientRect();
-    if(left+r.width>window.innerWidth-12)left=x-r.width-20;
-    if(left<8)left=8;
-    if(top+r.height>window.innerHeight-12)top=window.innerHeight-r.height-12;
-    if(top<8)top=8;
-    tt.style.left=left+'px';
-    tt.style.top=top+'px';
-  });
-  tt.style.left=left+'px';
-  tt.style.top=top+'px';
+function _calcTooltipPos(tt,mx,my){
+  const r=tt.getBoundingClientRect();
+  const h=r.height||200;
+  const w=r.width||340;
+  let left=mx+60;
+  let top=my-h/2;
+  if(left+w>window.innerWidth-12)left=mx-w-20;
+  if(left<8)left=8;
+  if(top+h>window.innerHeight-12)top=window.innerHeight-h-12;
+  if(top<8)top=8;
+  return{left,top};
 }
 function showSiTooltip(id,e){
   if(_siTooltipPinned)return;
@@ -1469,13 +1476,18 @@ function showSiTooltip(id,e){
   if(!tt){tt=document.createElement('div');tt.className='si-tooltip';tt.id='siTooltip';document.body.appendChild(tt);}
   tt.innerHTML=_siTooltipHtml(id);
   tt.style.opacity='1';
-  _clampTooltip(tt,e.clientX,e.clientY);
+  const pos=_calcTooltipPos(tt,e.clientX,e.clientY);
+  _siTargetX=pos.left;_siTargetY=pos.top;
+  _siCurX=pos.left;_siCurY=pos.top;
+  tt.style.left=pos.left+'px';tt.style.top=pos.top+'px';
 }
 function moveSiTooltip(e){
   if(_siTooltipPinned)return;
   const tt=document.getElementById('siTooltip');
   if(!tt)return;
-  _clampTooltip(tt,e.clientX,e.clientY);
+  const pos=_calcTooltipPos(tt,e.clientX,e.clientY);
+  _siTargetX=pos.left;_siTargetY=pos.top;
+  if(!_siRaf)_siRaf=requestAnimationFrame(_siLerp);
 }
 function hideSiTooltip(){
   if(_siTooltipPinned)return;
