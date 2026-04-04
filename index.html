@@ -1457,7 +1457,7 @@ function _siTooltipHtml(id){
   sections.forEach(s=>{
     const filled=s.fields.filter(f=>f[1]);
     if(!filled.length)return;
-    rows+=`<div style="font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin-top:6px;padding:4px 0 2px;border-bottom:1px solid #21262d">${s.title}</div>`;
+    rows+=`<div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:1px;margin-top:10px;padding:6px 0 4px;border-bottom:1px solid #30363d;font-weight:600">${s.title}</div>`;
     rows+=filled.map(f=>`<div class="si-tt-row"><span class="si-tt-label">${f[0]}</span><span class="si-tt-val">${esc(f[1])}</span></div>`).join('');
   });
   if(!rows)rows='<div style="color:#484f58;font-size:12px">No data</div>';
