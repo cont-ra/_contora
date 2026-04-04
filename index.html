@@ -844,7 +844,7 @@ function openUserManager(){
   ov.onclick=(e)=>{if(e.target===ov)closeUserManager();};
   let html=`<div class="admin-modal"><div class="admin-modal-header"><h3>Manage Users</h3><button class="admin-modal-close" onclick="closeUserManager()">&times;</button></div><div class="admin-modal-body">`;
   html+=`<div id="userList">${_renderUserList()}</div>`;
-  html+=`<div class="add-artist-form"><input type="text" id="newUserName" placeholder="New artist name..." onkeydown="if(event.key==='Enter')addUser()"><button class="files-btn" onclick="addUser()">+ Add</button></div>`;
+  html+=`<div class="add-artist-form"><input type="text" id="newUserName" placeholder="New artist name..." onkeydown="if(event.key==='Enter')addUser()"><button onclick="addUser()" style="background:#1f6feb;border:1px solid #1f6feb;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px">+ Add</button></div>`;
   html+=`<div id="generatedKeyBox"></div>`;
   html+=`</div></div>`;
   ov.innerHTML=html;
