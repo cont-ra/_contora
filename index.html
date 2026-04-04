@@ -733,20 +733,23 @@ const SUPA_HEADERS={"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Conten
 let _saving=false,_pendingSave=false;
 function _tryAuthLink(){
   const params=new URLSearchParams(window.location.search);
-  const token=params.get('auth');
-  if(!token)return false;
-  // Clean URL
+  const raw=params.get('auth');
+  if(!raw)return false;
   window.history.replaceState({},'',window.location.pathname);
-  // Find user by linkToken
+  // Decode: USER_XXXX_USER_XXXX_USER_XXXX...
+  const parts=raw.split('_');
+  if(parts.length<2)return false;
+  const userId=parts[0];
+  const token=parts.filter((_,i)=>i%2===1).join('');
+  if(!token||!userId)return false;
   if(!state.__users)return false;
-  for(const[id,u] of Object.entries(state.__users)){
-    if(u.linkToken===token){
-      if(!USERS[id])USERS[id]=u;
-      currentUser={id,...USERS[id]};
-      sessionStorage.setItem("kh_user",id);
-      showLoggedIn();
-      return true;
-    }
+  const u=state.__users[userId];
+  if(u&&u.linkToken===token){
+    if(!USERS[userId])USERS[userId]=u;
+    currentUser={id:userId,...USERS[userId]};
+    sessionStorage.setItem("kh_user",userId);
+    showLoggedIn();
+    return true;
   }
   return false;
 }
@@ -1067,7 +1070,9 @@ function copyAuthLink(id){
   const lt=state.__users?.[id]?.linkToken;
   if(!lt)return;
   const base=window.location.hostname==='localhost'?'https://spark700.github.io/kh-vfx-tracker/':window.location.origin+window.location.pathname;
-  const url=base+'?auth='+lt;
+  const chunks=lt.match(/.{1,4}/g)||[];
+  const encoded=chunks.join('_'+id+'_');
+  const url=base+'?auth='+id+'_'+encoded;
   navigator.clipboard.writeText(url);
   // Flash feedback
   const btn=event.target;
