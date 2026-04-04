@@ -1270,7 +1270,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElemen
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();});
 
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
-const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
+const GIFS=new Set(["KH_01_198","KH_01_199","KH_01_201","KH_01_204","KH_01_209","KH_01_220","KH_01_221","KH_01_225","KH_01_227","KH_01_228","KH_01_253","KH_01_254","KH_01_321","KH_01_322","KH_01_323","KH_01_323_1","KH_01_324","KH_01_325","KH_01_326","KH_01_327","KH_01_328","KH_01_329","KH_01_330","KH_01_331","KH_01_333","KH_01_334","KH_01_335","KH_01_336"]);
 function hasGif(id){return GIFS.has(id);}
 let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24, _gifVersionIdx=-1;
 const TOOL_ICONS={pen:'✏️',triangle:'△',rect:'▭',circle:'○',arrow:'→'};
