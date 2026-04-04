@@ -1448,13 +1448,18 @@ function _siLerp(){
 }
 function _siTooltipHtml(id){
   const si=getShotInfo(id);
-  const fields=[
-    ["Camera",si.camera],["Sensor Mode",si.sensor],["Lens",si.lens],["Focal Length",si.focalLength],
-    ["T-Stop",si.tStop],["Focus Distance",si.focusDistance],["Filters",si.filters],
-    ["Resolution",si.resolution],["Aspect Ratio",si.aspectRatio],["FPS",si.fps],["Shutter",si.shutterAngle],
-    ["Color Space",si.colorSpace],["Gamma",si.gamma],["Bit Depth",si.bitDepth],["Codec",si.codec],["LUT / IDT",si.lut],
+  const sections=[
+    {title:"Camera & Optics",fields:[["Camera",si.camera],["Sensor Mode",si.sensor],["Lens",si.lens],["Focal Length",si.focalLength],["T-Stop",si.tStop],["Focus Distance",si.focusDistance],["Filters",si.filters]]},
+    {title:"Format",fields:[["Resolution",si.resolution],["Aspect Ratio",si.aspectRatio],["FPS",si.fps],["Shutter",si.shutterAngle]]},
+    {title:"Color Pipeline",fields:[["Color Space",si.colorSpace],["Gamma",si.gamma],["Bit Depth",si.bitDepth],["Codec",si.codec],["LUT / IDT",si.lut]]},
   ];
-  let rows=fields.filter(f=>f[1]).map(f=>`<div class="si-tt-row"><span class="si-tt-label">${f[0]}</span><span class="si-tt-val">${esc(f[1])}</span></div>`).join('');
+  let rows='';
+  sections.forEach(s=>{
+    const filled=s.fields.filter(f=>f[1]);
+    if(!filled.length)return;
+    rows+=`<div style="font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin-top:6px;padding:4px 0 2px;border-bottom:1px solid #21262d">${s.title}</div>`;
+    rows+=filled.map(f=>`<div class="si-tt-row"><span class="si-tt-label">${f[0]}</span><span class="si-tt-val">${esc(f[1])}</span></div>`).join('');
+  });
   if(!rows)rows='<div style="color:#484f58;font-size:12px">No data</div>';
   return`<div class="si-tt-title">${id}</div>${rows}`;
 }
