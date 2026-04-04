@@ -431,7 +431,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.6</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v5.7</div>
 
 <script>
 const USERS = {
@@ -1617,16 +1617,41 @@ function _playVersion(id,idx){
     document.getElementById("gifPlayBtn").textContent="❚❚";
   },{once:true});
 }
-function deleteVersion(id,idx){
+async function deleteVersion(id,idx){
   if(!isAdmin()||!state[id]?.versions)return;
+  const v=state[id].versions[idx];
   state[id].versions.splice(idx,1);
   saveState(state);
   if(_shotCurrentId===id)_renderShotBody(id);
+  // Delete files from R2
+  if(v&&v.url){
+    const key=v.url.replace(CDN_BASE+"/","");
+    await r2Delete(key).catch(()=>{});
+    if(v.thumb){const tkey=v.thumb.replace(CDN_BASE+"/","");await r2Delete(tkey).catch(()=>{});}
+  }
+}
+async function r2Delete(key){
+  const now=new Date();
+  const amzDate=now.toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const dateStamp=amzDate.substring(0,8);
+  const region="auto",service="s3";
+  const host=new URL(R2_ENDPOINT).host;
+  const path="/"+R2_BUCKET+"/"+key;
+  const headers={"host":host,"x-amz-content-sha256":"UNSIGNED-PAYLOAD","x-amz-date":amzDate};
+  const signedHeaders=Object.keys(headers).sort().join(";");
+  const canonicalHeaders=Object.keys(headers).sort().map(k=>k+":"+headers[k]).join("\n")+"\n";
+  const canonicalRequest=["DELETE",path,"",canonicalHeaders,signedHeaders,"UNSIGNED-PAYLOAD"].join("\n");
+  const scope=dateStamp+"/"+region+"/"+service+"/aws4_request";
+  const stringToSign=["AWS4-HMAC-SHA256",amzDate,scope,await _sha256hex(canonicalRequest)].join("\n");
+  const signingKey=await _getSigningKey(R2_SECRET_KEY,dateStamp,region,service);
+  const sig=[...await _hmac(signingKey,stringToSign)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const auth="AWS4-HMAC-SHA256 Credential="+R2_ACCESS_KEY+"/"+scope+", SignedHeaders="+signedHeaders+", Signature="+sig;
+  return fetch(R2_ENDPOINT+path,{method:"DELETE",headers:{...headers,"Authorization":auth}});
 }
 
 // --- R2 UPLOAD ---
-const R2_ACCESS_KEY="daa70cc28fcd3326b99ec99e749c729c";
-const R2_SECRET_KEY="40d6495c4fa90a88db28a2fd9dd46297d5148627db3a582025bd578c95686158";
+const R2_ACCESS_KEY="d9fd350d6e623ab85ccb0a58930a35d8";
+const R2_SECRET_KEY="4498ba8839c82bd88fd4a9d3e4d9edb44268ff73a646d818314d6df8be6eb1f8";
 const R2_ENDPOINT="https://6b4341dd25b4f283d53ad86424e39e74.r2.cloudflarestorage.com";
 const R2_BUCKET="kh-vfx-video";
 
