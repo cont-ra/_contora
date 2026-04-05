@@ -204,7 +204,7 @@
   .files-sel-bar button.sel-danger { color: #f85149; }
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
   .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; }
-  .files-table tr.f-locked-sep hr { border: none; border-top: 1px dashed #3a414a; margin: 8px 10px; }
+  .files-table tr.f-locked-sep hr { border: none; border-top: 1px solid #21262d; margin: 0; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
   .f-drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.08s ease-out; opacity: 0.92; }
   .files-empty { text-align: center; padding: 60px 20px; color: #484f58; }
@@ -3250,56 +3250,36 @@ function _estimateTimeRemaining(){
   if(remaining<60)return Math.ceil(remaining)+'s remaining';
   return Math.ceil(remaining/60)+'m remaining';
 }
-function _updateQueueItemDOM(item){
-  const panel=document.getElementById("uploadQueuePanel");
-  if(!panel)return;
-  const el=panel.querySelector(`[data-uq-id="${item.id}"]`);
-  if(!el)return;
-  let icon,cls='';
-  if(item.status==='done'){icon='✅';cls='uq-done';}
-  else if(item.status==='uploading'){icon='<span class="uq-spin">◌</span>';cls='uq-uploading';}
-  else if(item.status==='failed'){icon='❌';cls='uq-failed';}
-  else if(item.status==='cancelled'){icon='⊘';cls='uq-cancelled';}
-  else{icon='⭕';cls='uq-pending';}
-  el.className='uq-item '+cls;
-  const iconEl=el.querySelector('.uq-icon');if(iconEl)iconEl.innerHTML=icon;
-  const pctEl=el.querySelector('.uq-pct');
-  if(item.status==='uploading'&&!pctEl){
-    const nameEl=el.querySelector('.uq-name');
-    if(nameEl){const s=document.createElement('span');s.className='uq-pct';s.dataset.uqPct=item.id;s.textContent='0%';nameEl.after(s);}
-  } else if(item.status!=='uploading'&&pctEl){pctEl.remove();}
-  const xBtn=el.querySelector('.uq-x');
-  if((item.status==='done'||item.status==='failed'||item.status==='cancelled')&&xBtn)xBtn.remove();
-}
-function _updateQueueHeader(){
+// Batch ALL queue DOM updates into one rAF — never interrupts scroll/clicks
+let _uqDirty=false;
+function _scheduleQueueUpdate(){if(_uqDirty)return;_uqDirty=true;requestAnimationFrame(()=>{_uqDirty=false;_flushQueueDOM();});}
+function _updateQueueItemDOM(){_scheduleQueueUpdate();}
+function _updateQueueHeader(){_scheduleQueueUpdate();}
+function _updateQueueProgress(itemId,pct){const it=_uploadQueue.items.find(i=>i.id===itemId);if(it)it.progress=pct;_scheduleQueueUpdate();}
+function _flushQueueDOM(){
   const panel=document.getElementById("uploadQueuePanel");
   if(!panel)return;
   const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
   const done=active.filter(i=>i.status==='done').length;
+  // Header — textContent only
   const titleEl=panel.querySelector('.uq-title');
-  if(titleEl)titleEl.textContent=`${done===active.length?'Uploaded':'Uploading'} ${done}/${active.length}`;
+  if(titleEl){const t=(done===active.length?'Uploaded':'Uploading')+' '+done+'/'+active.length;if(titleEl.textContent!==t)titleEl.textContent=t;}
   const etaEl=panel.querySelector('.uq-eta');
-  if(etaEl)etaEl.textContent=_uploadQueue.processing?(_estimateTimeRemaining()||'Uploading...'):'Done';
+  if(etaEl){const t=_uploadQueue.processing?(_estimateTimeRemaining()||'Uploading...'):'Done';if(etaEl.textContent!==t)etaEl.textContent=t;}
   const subEl=panel.querySelector('.uq-subtitle');
-  if(subEl&&!_uploadQueue.processing)subEl.style.display='none';
-}
-function _updateQueueProgress(itemId,pct){
-  const panel=document.getElementById("uploadQueuePanel");
-  if(!panel)return;
-  const pctEl=panel.querySelector(`[data-uq-pct="${itemId}"]`);
-  if(pctEl)pctEl.textContent=pct+'%';
-  // Update header ETA every 2 seconds max
-  const now=Date.now();
-  if(now-_uqLastFullRender>2000){
-    _uqLastFullRender=now;
-    const etaEl=panel.querySelector('.uq-eta');
-    if(etaEl)etaEl.textContent=_estimateTimeRemaining()||'Uploading...';
-    const titleEl=panel.querySelector('.uq-title');
-    if(titleEl){
-      const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
-      const done=active.filter(i=>i.status==='done').length;
-      titleEl.textContent=`Uploading ${done}/${active.length}`;
-    }
+  if(subEl){const d=_uploadQueue.processing?'flex':'none';if(subEl.style.display!==d)subEl.style.display=d;}
+  // Items — only textContent + visibility, no add/remove/innerHTML
+  for(const item of active){
+    const el=panel.querySelector('[data-uq-id="'+item.id+'"]');
+    if(!el)continue;
+    const cls='uq-item '+(item.status==='done'?'uq-done':item.status==='uploading'?'uq-uploading':item.status==='failed'?'uq-failed':'uq-pending');
+    if(el.className!==cls)el.className=cls;
+    const iconEl=el.querySelector('.uq-icon');
+    if(iconEl){const ic=item.status==='done'?'✅':item.status==='uploading'?'◌':item.status==='failed'?'❌':'⭕';if(iconEl.textContent!==ic)iconEl.textContent=ic;}
+    const pctEl=el.querySelector('.uq-pct');
+    if(pctEl){pctEl.textContent=item.status==='uploading'?item.progress+'%':'';pctEl.style.visibility=item.status==='uploading'?'visible':'hidden';}
+    const xBtn=el.querySelector('.uq-x');
+    if(xBtn)xBtn.style.visibility=(item.status==='pending'||item.status==='uploading')?'visible':'hidden';
   }
 }
 function _renderUploadQueue(){
@@ -3333,12 +3313,12 @@ function _renderUploadQueue(){
   for(const item of active){
     let icon,cls='';
     if(item.status==='done'){icon='✅';cls='uq-done';}
-    else if(item.status==='uploading'){icon='<span class="uq-spin">◌</span>';cls='uq-uploading';}
+    else if(item.status==='uploading'){icon='◌';cls='uq-uploading';}
     else if(item.status==='failed'){icon='❌';cls='uq-failed';}
     else{icon='⭕';cls='uq-pending';}
-    const pct=item.status==='uploading'?`<span class="uq-pct" data-uq-pct="${item.id}">${item.progress}%</span>`:'';
-    const xBtn=(item.status==='pending'||item.status==='uploading')?`<button class="uq-x" onclick="event.stopPropagation();_cancelQueueItem('${item.id}')">✕</button>`:'';
-    html+=`<div class="uq-item ${cls}" data-uq-id="${item.id}"><span class="uq-icon">${icon}</span><span class="uq-name" title="${esc(item.fileName)}">${esc(item.fileName)}</span>${pct}${xBtn}</div>`;
+    const pctVis=item.status==='uploading'?'visible':'hidden';
+    const xVis=(item.status==='pending'||item.status==='uploading')?'visible':'hidden';
+    html+=`<div class="uq-item ${cls}" data-uq-id="${item.id}"><span class="uq-icon">${icon}</span><span class="uq-name" title="${esc(item.fileName)}">${esc(item.fileName)}</span><span class="uq-pct" style="visibility:${pctVis}">${item.progress}%</span><button class="uq-x" style="visibility:${xVis}" onclick="event.stopPropagation();_cancelQueueItem('${item.id}')">✕</button></div>`;
   }
   html+=`</div>`;
   panel.innerHTML=html;
