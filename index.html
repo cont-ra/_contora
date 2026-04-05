@@ -1428,7 +1428,6 @@ async function _pubHandleFiles(folder,files){
   const statusEl=document.getElementById("pubStatus");
   const listEl=document.getElementById("pubList");
   const existing=state.__admin?.files?.[folder]||[];
-  const MAX_RETRIES=3;
   for(const file of files){
     // Check duplicate
     const dupIdx=existing.findIndex(f=>f.name===file.name);
@@ -1445,18 +1444,20 @@ async function _pubHandleFiles(folder,files){
     const itemId='pub-'+Date.now()+'-'+Math.random().toString(36).substr(2,4);
     listEl.insertAdjacentHTML('beforeend',`<div class="pub-upload-item" id="${itemId}"><span class="pub-icon">◌</span><span class="pub-name">${esc(file.name)}</span><span class="pub-pct">0%</span></div>`);
     statusEl.textContent='Uploading '+file.name+'...';
-    // Upload with retry on failure
+    // Upload with infinite retry every 10s until success or page close
     let ok=false;
-    for(let attempt=0;attempt<MAX_RETRIES;attempt++){
+    let attempt=0;
+    while(!ok){
       ok=await r2UploadXHR(r2Key,file,(pct)=>{
         const el=document.getElementById(itemId);
         if(el)el.querySelector('.pub-pct').textContent=pct+'%';
       });
       if(ok)break;
-      // Wait before retry (exponential backoff)
+      attempt++;
       const el=document.getElementById(itemId);
-      if(el)el.querySelector('.pub-pct').textContent='Retry '+(attempt+2)+'/'+MAX_RETRIES;
-      await new Promise(r=>setTimeout(r,1000*(attempt+1)));
+      if(el){el.querySelector('.pub-icon').textContent='🔄';el.querySelector('.pub-pct').textContent='Retry #'+attempt+' in 10s...';}
+      statusEl.textContent='Connection lost — retrying '+file.name+'...';
+      await new Promise(r=>setTimeout(r,10000));
     }
     const el=document.getElementById(itemId);
     if(ok){
