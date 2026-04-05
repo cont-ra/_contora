@@ -519,7 +519,7 @@
   .af-share-row button:hover { background: #30363d; }
   .af-share-row button.copied { border-color: #3fb950; color: #3fb950; }
   /* Public upload page */
-  .pub-upload-wrap { max-width: 600px; margin: 60px auto; text-align: center; }
+  .pub-upload-wrap { max-width: 700px; margin: 40px auto; text-align: center; padding: 0 20px; }
   .pub-upload-wrap h2 { color: #f0f6fc; font-size: 22px; margin-bottom: 6px; }
   .pub-upload-wrap .pub-folder { color: #58a6ff; font-family: 'SF Mono', monospace; font-size: 14px; margin-bottom: 20px; }
   .pub-upload-wrap .pub-status { color: #8b949e; font-size: 13px; margin-top: 12px; min-height: 20px; }
@@ -528,6 +528,22 @@
   .pub-upload-item .pub-icon { font-size: 14px; flex-shrink: 0; }
   .pub-upload-item .pub-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pub-upload-item .pub-pct { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; }
+  .pub-existing { text-align: left; margin-top: 24px; border-top: 1px solid #21262d; padding-top: 16px; }
+  .pub-existing h3 { font-size: 13px; color: #8b949e; font-weight: 600; margin-bottom: 8px; }
+  .pub-existing-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; color: #8b949e; }
+  .pub-existing-item .pe-icon { flex-shrink: 0; }
+  .pub-existing-item .pe-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
+  .pub-existing-item .pe-size { font-family: 'SF Mono', monospace; font-size: 11px; }
+  .pub-dup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  .pub-dup-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; max-width: 440px; width: 90%; }
+  .pub-dup-box h3 { color: #f0f6fc; font-size: 15px; margin-bottom: 8px; }
+  .pub-dup-box p { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
+  .pub-dup-box .dup-file { font-family: 'SF Mono', monospace; color: #58a6ff; font-size: 13px; background: #21262d; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; }
+  .pub-dup-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pub-dup-btns button { flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 12px; }
+  .pub-dup-btns button:hover { background: #30363d; }
+  .pub-dup-btns button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  .pub-dup-btns button.primary:hover { background: #388bfd; }
 </style>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ffmpeg/ffmpeg.js"></script>
@@ -1357,41 +1373,94 @@ async function _initPublicUpload(token){
 function _showPubError(msg){
   document.body.innerHTML=`<div class="pub-upload-wrap"><h2>KILLHOUSE VFX</h2><div style="color:#f85149;font-size:16px;margin-top:20px">${msg}</div></div>`;
 }
-let _pubQueue=[];
+let _pubFolder=null;
 function _renderPublicUpload(folder,token){
-  const folderName=folder.includes('/')?folder.split('/').pop():folder;
+  _pubFolder=folder;
   let html=`<div class="pub-upload-wrap"><h2>📁 Upload Files</h2><div class="pub-folder">${esc(folder)}</div>`;
   html+=`<div class="files-drop" id="pubDropZone" onclick="document.getElementById('pubFileInput').click()">Drop files here or click to upload</div>`;
   html+=`<input type="file" id="pubFileInput" multiple style="display:none">`;
   html+=`<div class="pub-status" id="pubStatus"></div>`;
   html+=`<div class="pub-upload-list" id="pubList"></div>`;
+  html+=`<div class="pub-existing" id="pubExisting"></div>`;
   html+=`</div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   const dz=document.getElementById("pubDropZone");
   const fi=document.getElementById("pubFileInput");
-  fi.addEventListener("change",()=>{_pubHandleFiles(folder,token,Array.from(fi.files));fi.value='';});
+  fi.addEventListener("change",()=>{_pubHandleFiles(folder,Array.from(fi.files));fi.value='';});
   dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
   dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
-  dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_pubHandleFiles(folder,token,Array.from(e.dataTransfer.files));});
+  dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_pubHandleFiles(folder,Array.from(e.dataTransfer.files));});
+  _pubRenderExisting(folder);
 }
-async function _pubHandleFiles(folder,token,files){
+function _pubRenderExisting(folder){
+  const el=document.getElementById("pubExisting");
+  if(!el)return;
+  const files=state.__admin?.files?.[folder]||[];
+  if(files.length===0){el.innerHTML='';return;}
+  let totalSize=0;
+  files.forEach(f=>totalSize+=(f.size||0));
+  let html=`<h3>Uploaded files — ${files.length} file${files.length!==1?'s':''}, ${_formatSize(totalSize)}</h3>`;
+  for(const f of files){
+    html+=`<div class="pub-existing-item"><span class="pe-icon">${_fileIcon(f.name)}</span><span class="pe-name">${esc(f.name)}</span><span class="pe-size">${_formatSize(f.size)}</span></div>`;
+  }
+  el.innerHTML=html;
+}
+// Duplicate resolution dialog — returns promise: 'replace'|'skip'|'replace_all'|'skip_all'|null
+let _pubDupPolicy=null;// 'replace_all' or 'skip_all' — remembered for batch
+function _pubAskDuplicate(fileName){
+  if(_pubDupPolicy)return Promise.resolve(_pubDupPolicy);
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');ov.className='pub-dup-overlay';
+    ov.innerHTML=`<div class="pub-dup-box"><h3>File already exists</h3><div class="dup-file">${esc(fileName)}</div><p>This file has already been uploaded. What would you like to do?</p><div class="pub-dup-btns"><button onclick="_pubDupResolve(this,'skip')">Skip</button><button onclick="_pubDupResolve(this,'skip_all')">Skip All</button><button onclick="_pubDupResolve(this,'replace')" class="primary">Replace</button><button onclick="_pubDupResolve(this,'replace_all')" class="primary">Replace All</button></div></div>`;
+    ov._resolve=resolve;
+    document.body.appendChild(ov);
+  });
+}
+function _pubDupResolve(btn,action){
+  const ov=btn.closest('.pub-dup-overlay');
+  if(action==='replace_all'||action==='skip_all')_pubDupPolicy=action;
+  if(ov._resolve)ov._resolve(action);
+  ov.remove();
+}
+async function _pubHandleFiles(folder,files){
   if(!files.length)return;
+  _pubDupPolicy=null;// reset batch policy for each new drop
   const statusEl=document.getElementById("pubStatus");
   const listEl=document.getElementById("pubList");
+  const existing=state.__admin?.files?.[folder]||[];
+  const MAX_RETRIES=3;
   for(const file of files){
+    // Check duplicate
+    const dupIdx=existing.findIndex(f=>f.name===file.name);
+    if(dupIdx>=0){
+      const action=await _pubAskDuplicate(file.name);
+      if(action==='skip'||action==='skip_all'){
+        listEl.insertAdjacentHTML('beforeend',`<div class="pub-upload-item"><span class="pub-icon">⏭</span><span class="pub-name">${esc(file.name)}</span><span class="pub-pct" style="color:#d29922">Skipped</span></div>`);
+        continue;
+      }
+      // Replace — remove old entry (R2 overwrites on same key)
+      existing.splice(dupIdx,1);
+    }
     const r2Key='admin/'+folder+'/'+file.name;
     const itemId='pub-'+Date.now()+'-'+Math.random().toString(36).substr(2,4);
-    const itemHtml=`<div class="pub-upload-item" id="${itemId}"><span class="pub-icon">◌</span><span class="pub-name">${esc(file.name)}</span><span class="pub-pct">0%</span></div>`;
-    listEl.insertAdjacentHTML('beforeend',itemHtml);
+    listEl.insertAdjacentHTML('beforeend',`<div class="pub-upload-item" id="${itemId}"><span class="pub-icon">◌</span><span class="pub-name">${esc(file.name)}</span><span class="pub-pct">0%</span></div>`);
     statusEl.textContent='Uploading '+file.name+'...';
-    const ok=await r2UploadXHR(r2Key,file,(pct)=>{
+    // Upload with retry on failure
+    let ok=false;
+    for(let attempt=0;attempt<MAX_RETRIES;attempt++){
+      ok=await r2UploadXHR(r2Key,file,(pct)=>{
+        const el=document.getElementById(itemId);
+        if(el)el.querySelector('.pub-pct').textContent=pct+'%';
+      });
+      if(ok)break;
+      // Wait before retry (exponential backoff)
       const el=document.getElementById(itemId);
-      if(el){el.querySelector('.pub-pct').textContent=pct+'%';}
-    });
+      if(el)el.querySelector('.pub-pct').textContent='Retry '+(attempt+2)+'/'+MAX_RETRIES;
+      await new Promise(r=>setTimeout(r,1000*(attempt+1)));
+    }
     const el=document.getElementById(itemId);
     if(ok){
-      if(el){el.querySelector('.pub-icon').textContent='✅';el.querySelector('.pub-pct').textContent='';}
-      // Save file metadata to state
+      if(el){el.querySelector('.pub-icon').textContent='✅';el.querySelector('.pub-pct').textContent=_formatSize(file.size);}
       if(!state.__admin)state.__admin={};
       if(!state.__admin.files)state.__admin.files={};
       if(!state.__admin.files[folder])state.__admin.files[folder]=[];
@@ -1400,6 +1469,7 @@ async function _pubHandleFiles(folder,token,files){
         author:'Guest',date:new Date().toISOString().slice(0,10)
       });
       saveState(state);
+      _pubRenderExisting(folder);
     } else {
       if(el){el.querySelector('.pub-icon').textContent='❌';el.querySelector('.pub-pct').textContent='Failed';}
     }
