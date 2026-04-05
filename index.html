@@ -2370,47 +2370,58 @@ function _renderFileCard(path){
   return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${entry?.url?`<a class="cfc-btn" href="${entry.url}" target="_blank" onclick="event.stopPropagation()" title="Download">⬇</a>`:''}</div></div>`;
 }
 // Document-level capture handlers for chat file drop
+// Use element ID matching instead of contains() — target may be detached after re-render
+function _isInsideChat(el){
+  while(el){if(el.id==='notePanelBody')return true;el=el.parentElement;}
+  // Fallback: check by tag/class for detached elements
+  return false;
+}
+function _isOnTextarea(el){
+  while(el){if(el.id==='chatTA')return true;el=el.parentElement;}
+  return false;
+}
 document.addEventListener('dragover',e=>{
   if(noteType!=='chat')return;
-  const npb=document.getElementById("notePanelBody");
-  if(!npb||!npb.contains(e.target))return;
+  // Accept drop anywhere in note overlay when chat is open
+  const ov=document.getElementById("noteOverlay");
+  if(!ov||ov.classList.contains("hidden"))return;
+  const notePanel=ov.querySelector(".note-panel");
+  if(!notePanel||!notePanel.contains(e.target))return;
   e.preventDefault();e.dataTransfer.dropEffect="copy";
   const ta=document.getElementById("chatTA");
   const cm=document.getElementById("chatMessages");
-  if(ta&&(e.target===ta||ta.contains(e.target))){ta.classList.add("chat-drop-active");if(cm)cm.classList.remove("drop-highlight");}
+  if(_isOnTextarea(e.target)){if(ta)ta.classList.add("chat-drop-active");if(cm)cm.classList.remove("drop-highlight");}
   else{if(cm)cm.classList.add("drop-highlight");if(ta)ta.classList.remove("chat-drop-active");}
 },true);
 document.addEventListener('dragleave',e=>{
   if(noteType!=='chat')return;
-  const npb=document.getElementById("notePanelBody");
-  if(!npb)return;
-  if(npb.contains(e.relatedTarget))return;
   const ta=document.getElementById("chatTA");if(ta)ta.classList.remove("chat-drop-active");
   const cm=document.getElementById("chatMessages");if(cm)cm.classList.remove("drop-highlight");
 },true);
 document.addEventListener('drop',e=>{
   if(noteType!=='chat')return;
-  const npb=document.getElementById("notePanelBody");
-  if(!npb||!npb.contains(e.target))return;
-  e.preventDefault();e.stopPropagation();
-  const ta=document.getElementById("chatTA");if(ta)ta.classList.remove("chat-drop-active");
-  const cm=document.getElementById("chatMessages");if(cm)cm.classList.remove("drop-highlight");
   const file=e.dataTransfer.getData("text/x-file-move");
   const folder=e.dataTransfer.getData("text/x-folder-move");
   const multi=e.dataTransfer.getData("text/x-multi-move");
+  if(!file&&!folder&&!multi)return;
+  e.preventDefault();e.stopPropagation();
+  const ta=document.getElementById("chatTA");if(ta)ta.classList.remove("chat-drop-active");
+  const cm=document.getElementById("chatMessages");if(cm)cm.classList.remove("drop-highlight");
   let names=[];
   if(multi){try{names=JSON.parse(multi);}catch(ex){}}
   else if(file)names=[file];
   else if(folder)names=[folder];
   if(!names.length)return;
   const path=_filesPath.length?_filesPath.join('/')+'/':'';
-  const onTA=ta&&(e.target===ta||ta.contains(e.target));
-  if(onTA){
-    const insert=names.map(n=>`[[file:${path}${n}]]`).join(' ');
-    const pos=ta.selectionStart||0;
-    ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
-    ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
-    ta.dispatchEvent(new Event("input"));
+  if(_isOnTextarea(e.target)){
+    const taEl=document.getElementById("chatTA");
+    if(taEl){
+      const insert=names.map(n=>`[[file:${path}${n}]]`).join(' ');
+      const pos=taEl.selectionStart||0;
+      taEl.value=taEl.value.slice(0,pos)+insert+taEl.value.slice(pos);
+      taEl.focus();taEl.selectionStart=taEl.selectionEnd=pos+insert.length;
+      taEl.dispatchEvent(new Event("input"));
+    }
   } else {
     for(const n of names)_sendChatFileCard(`[[filecard:${path}${n}]]`);
   }
