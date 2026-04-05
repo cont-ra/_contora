@@ -2619,16 +2619,10 @@ function _renderFileCard(path){
   }
   return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${dlBtn}</div></div>`;
 }
-async function _downloadFile(url,name){
-  try{
-    const r=await fetch(url);
-    if(!r.ok)throw new Error('fetch failed');
-    const blob=await r.blob();
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);a.download=name;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-  }catch(e){window.open(url,'_blank');}
+function _downloadFile(url,name){
+  const a=document.createElement('a');
+  a.href=url;a.download=name;a.target='_blank';a.rel='noopener';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 function _downloadCardFolder(path){
   const id=noteTaskId;if(!id)return;
