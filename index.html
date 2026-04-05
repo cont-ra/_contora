@@ -5823,11 +5823,25 @@ function _validateVersionFile(shotId,filename){
   const bnLower=baseName.toLowerCase();
   const idLower=shotId.toLowerCase();
   if(bnLower!==idLower&&bnLower!==idLower+'_prev'){
+    // Check if file belongs to ANOTHER known shot → hard block
+    const isOtherShot=TASKS.some(t=>bnLower===t.id.toLowerCase()||bnLower===t.id.toLowerCase()+'_prev');
+    // Check if baseName looks like a shot ID pattern (e.g. KH_01_XXX)
+    const looksLikeShotId=/^[A-Z]{2,4}_\d{2}_\d{2,4}/i.test(baseName);
+    if(isOtherShot||(looksLikeShotId&&!isOtherShot)){
+      // Definitely wrong shot — hard block
+      const current=_highlightError(filename,[
+        {text:baseName,error:true},
+        {text:vNum?_formatVersion(vNum):''},{text:'.'+ext}
+      ]);
+      errors.push({type:'wrong_name',suggest:correctName,current});
+      return {ok:false,errors,warnings,baseName,vNum,ext};
+    }
+    // Abstract name — offer auto-rename
     const current=_highlightError(filename,[
       {text:baseName,error:true},
       {text:vNum?_formatVersion(vNum):''},{text:'.'+ext}
     ]);
-    errors.push({type:'wrong_name',suggest:correctName,current});
+    errors.push({type:'bad_name',suggest:correctName,current,detail:'File name doesn\'t match shot <b>'+esc(shotId)+'</b>'});
     return {ok:false,errors,warnings,baseName,vNum,ext};
   }
 
