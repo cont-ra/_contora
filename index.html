@@ -1297,51 +1297,45 @@ function _loadEditMode(){
 }
 function isEditMode(){return _editMode;}
 
+let _myFilesShotId=null;
 function openMyFiles(){
   if(!currentUser||isGuest())return;
   document.getElementById("myFilesOverlay").classList.remove("hidden");
   document.getElementById("myFilesUser").textContent=currentUser.display;
-  _myFilesPath=[];
-  _renderMyFiles();
+  _myFilesShotId=null;
+  _renderMyFilesRoot();
 }
 function closeMyFiles(){
   document.getElementById("myFilesOverlay").classList.add("hidden");
+  _myFilesShotId=null;
 }
-let _myFilesPath=[];
-function _renderMyFiles(){
+function _renderMyFilesRoot(){
+  _myFilesShotId=null;
   const body=document.getElementById("myFilesBody");
   if(!body)return;
   const uid=currentUser?.id;
-  // Get shots assigned to this user (admin sees all)
   const myShots=TASKS.filter(t=>isAdmin()?true:getAssignee(t.id)===uid);
-  if(_myFilesPath.length===0){
-    // Root: show shot folders
-    let html='<table class="files-table"><thead><tr><th>Shot</th><th>Category</th><th>Status</th><th>Files</th></tr></thead><tbody>';
-    for(const t of myShots){
-      const cat=getCat(t.id);const catCol=getCatColor(cat);
-      const st=getStatus(t.id);
-      const fileCount=Object.values(state[t.id]?.files||{}).reduce((s,arr)=>s+(arr?.length||0),0)+(state[t.id]?.versions?.length||0);
-      html+=`<tr style="cursor:pointer" onclick="_myFilesNav('${esc(t.id)}')">
-        <td style="color:#58a6ff;font-weight:600">📁 ${esc(t.id)}</td>
-        <td><span style="background:${catCol}22;color:${catCol};border:1px solid ${catCol}44;padding:2px 8px;border-radius:10px;font-size:11px">${esc(getCatLabel(cat))}</span></td>
-        <td><span class="s-${st}" style="font-size:11px">${st.toUpperCase()}</span></td>
-        <td style="color:#8b949e">${fileCount||'—'}</td>
-      </tr>`;
-    }
-    html+='</tbody></table>';
-    if(!myShots.length)html='<div style="text-align:center;color:#484f58;padding:40px">No shots assigned</div>';
-    body.innerHTML=html;
-  } else {
-    // Inside a shot — open shot files panel
-    const shotId=_myFilesPath[0];
-    closeMyFiles();
-    openShot(shotId);
-    switchShotTab('files');
+  let html='<table class="files-table"><thead><tr><th>Shot</th><th>Category</th><th>Status</th><th>Files</th></tr></thead><tbody>';
+  for(const t of myShots){
+    const cat=getCat(t.id);const catCol=getCatColor(cat);
+    const st=getStatus(t.id);
+    const fileCount=Object.values(state[t.id]?.files||{}).reduce((s,arr)=>s+(arr?.length||0),0)+(state[t.id]?.versions?.length||0);
+    html+=`<tr style="cursor:pointer" ondblclick="_myFilesEnterShot('${esc(t.id)}')">
+      <td style="color:#58a6ff;font-weight:600">📁 ${esc(t.id)}</td>
+      <td><span style="background:${catCol}22;color:${catCol};border:1px solid ${catCol}44;padding:2px 8px;border-radius:10px;font-size:11px">${esc(getCatLabel(cat))}</span></td>
+      <td><span class="s-${st}" style="font-size:11px">${st.toUpperCase()}</span></td>
+      <td style="color:#8b949e">${fileCount||'—'}</td>
+    </tr>`;
   }
+  html+='</tbody></table>';
+  if(!myShots.length)html='<div style="text-align:center;color:#484f58;padding:40px">No shots assigned</div>';
+  body.innerHTML=html;
 }
-function _myFilesNav(shotId){
-  _myFilesPath=[shotId];
-  _renderMyFiles();
+function _myFilesEnterShot(shotId){
+  _myFilesShotId=shotId;
+  _shotCurrentId=shotId;
+  _filesPath=[];
+  _renderShotFiles(shotId);
 }
 function openAddShotDialog(){
   if(!isEditMode()||!isAdmin())return;
@@ -4272,7 +4266,7 @@ function _formatSize(bytes){
 }
 function _resolveFilesPath(id){
   let items=_getFilesRoot(id);
-  let breadcrumb=id==='__admin'?'admin':id;
+  let breadcrumb=id==='__admin'?'admin':(_myFilesShotId?'My Files / '+id:id);
   let currentFolder=null;
   for(const p of _filesPath){
     const folder=items.find(f=>f.name===p&&f.type==='folder');
@@ -4620,9 +4614,9 @@ function _buildFileTip(id,name,size,editCell,date,icon){
   return ` data-tip="${esc(name)}" data-tip-size="${esc(size||'')}" data-tip-edit="${esc(editCell||'')}" data-tip-date="${esc(date||'')}" data-tip-icon="${esc(icon||'')}"`;
 }
 let _chatFileMode=false;
-function _renderShotFiles(id){
+function _renderShotFiles(id,overrideBody){
   _clearSelection();_removeCfTip();
-  const body=_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody");
+  const body=overrideBody||(_myFilesShotId===id?document.getElementById("myFilesBody"):null)||(_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody"));
   const {items,breadcrumb,currentFolder}=_resolveFilesPath(id);
   // Check if current folder or any ancestor in path is locked
   let isLocked=currentFolder?.locked||false;
@@ -4655,7 +4649,7 @@ function _renderShotFiles(id){
   html+=`<div class="files-table-wrap">`;
   const editColName=id==='__admin'?'Author':'Last Edit';
   html+=`<table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>${editColName}</th><th>Date</th><th></th></tr></thead><tbody>`;
-  if(_filesPath.length>0){
+  if(_filesPath.length>0||_myFilesShotId){
     html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
   let lastWasLocked=false;
@@ -4840,7 +4834,7 @@ function _renderShotFiles(id){
   }
   // Double-click to open folders / navigate up
   body.querySelectorAll("tr[data-nav='up']").forEach(row=>{
-    row.addEventListener("dblclick",()=>{_filesPath.pop();_renderShotFiles(id);});
+    row.addEventListener("dblclick",()=>{if(_filesPath.length>0){_filesPath.pop();_renderShotFiles(id);}else if(_myFilesShotId){_renderMyFilesRoot();}});
     row.style.cursor="pointer";
   });
   body.querySelectorAll("td[data-nav-folder]").forEach(td=>{
