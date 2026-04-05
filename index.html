@@ -4028,9 +4028,12 @@ function _getFilesRoot(id){
   } else { sourcePreview=[]; }
   const stateOrigFiles=(state[id]?.files?.['source/original'])||[];
   const sourceOriginal=stateOrigFiles.map(f=>({name:f.name,size:f.size?_formatSize(f.size):'…',_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+  const stateAssetFiles=(state[id]?.files?.['source/assets'])||[];
+  const sourceAssets=stateAssetFiles.map(f=>({name:f.name,size:f.size?_formatSize(f.size):'…',_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
   const sourceChildren=[
     {name:"original",type:"folder",locked:true,children:sourceOriginal},
     {name:"preview",type:"folder",locked:true,children:sourcePreview},
+    {name:"assets",type:"folder",locked:true,children:sourceAssets},
   ];
   // versions: preview (artist uploads _v###) + final (approved renders)
   const versions=state[id]?.versions||[];
@@ -5021,6 +5024,22 @@ async function _uploadFilesToR2(id,fileList){
     if(!filesDict[stateKey])filesDict[stateKey]=[];
     for(const file of fileList){
       if(filesDict[stateKey].some(f=>f.name===file.name))continue;
+      queue.push({file,r2Key:r2Folder+'/'+file.name,stateKey,meta:{}});
+    }
+    if(queue.length)_enqueueFiles(id,queue);
+    return;
+  }
+
+  // source/assets — naming: {shotId}_{context}_asset###.ext
+  if(stateKey==='source/assets'){
+    const idLower=id.toLowerCase();
+    const assetPattern=new RegExp('^'+id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'_.+_asset\\d{1,3}\\..+$','i');
+    for(const file of fileList){
+      if(!assetPattern.test(file.name)){
+        await _showAlert('Naming error','Asset must be named:<br><b>'+esc(id)+'_{name}_asset###.ext</b><br><br>Example: <span style="color:#3fb950">'+esc(id)+'_explosion_asset001.blend</span><br><br>Got: <span style="color:#f85149">'+esc(file.name)+'</span>');
+        continue;
+      }
+      if(state[id]?.files?.[stateKey]?.some(f=>f.name===file.name)){await _showAlert('Duplicate',esc(file.name)+' already exists.');continue;}
       queue.push({file,r2Key:r2Folder+'/'+file.name,stateKey,meta:{}});
     }
     if(queue.length)_enqueueFiles(id,queue);
