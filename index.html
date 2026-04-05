@@ -127,7 +127,8 @@
   .shot-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-content: flex-start; align-items: stretch; }
   .files-panel { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; justify-content: space-between; position: relative; }
-  .upload-queue-panel { position: fixed; bottom: 20px; right: 20px; width: 340px; max-height: 400px; display: flex; flex-direction: column; background: #0d1117; border: 1px solid #30363d; border-radius: 10px; overflow: hidden; z-index: 9000; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+  .upload-queue-panel { position: fixed; top: 50%; right: calc(50vw - 45vw - 340px - 10px); transform: translateY(-50%); width: 340px; max-height: 80vh; display: flex; flex-direction: column; background: #0d1117; border: 1px solid #30363d; border-radius: 10px; overflow: hidden; z-index: 9000; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+  @media(max-width:1800px){ .upload-queue-panel { right: 20px; top: auto; bottom: 20px; transform: none; } }
   .upload-queue-header { padding: 10px 14px; border-bottom: 1px solid #30363d; }
   .upload-queue-header .uq-top { display: flex; align-items: center; gap: 6px; }
   .upload-queue-header .uq-title { flex: 1; font-size: 13px; font-weight: 600; color: #c9d1d9; }
@@ -203,7 +204,7 @@
   .files-sel-bar button:hover { background: rgba(255,255,255,0.15); }
   .files-sel-bar button.sel-danger { color: #f85149; }
   .files-sel-bar button.sel-danger:hover { background: rgba(248,81,73,0.15); }
-  .files-table tr.f-locked-sep td { background: transparent; border: none !important; padding: 0; }
+  .files-table tr.f-locked-sep td { background: transparent; border: hidden !important; padding: 0; }
   .files-table tr.f-locked-sep hr { border: none; border-top: 1px dashed #3a414a; margin: 8px 10px; }
   .files-rect-sel { position: absolute; border: 1px solid rgba(88,166,255,0.5); background: rgba(88,166,255,0.08); pointer-events: none; z-index: 5; }
   .f-drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.08s ease-out; opacity: 0.92; }
@@ -3146,7 +3147,7 @@ async function _deleteSelected(id){
 }
 // === Upload Queue System ===
 const _uploadQueue={shotId:null,items:[],processing:false,collapsed:false};
-let _uqRafPending=false;
+let _uqLastFullRender=0;
 
 function _enqueueFiles(shotId,validatedList){
   if(_uploadQueue.shotId&&_uploadQueue.shotId!==shotId){
@@ -3189,7 +3190,7 @@ async function _processQueue(){
     _renderUploadQueue();
     const {promise,abort}=r2UploadXHRAbortable(next.r2Key,next.file,(pct)=>{
       next.progress=pct;
-      if(!_uqRafPending){_uqRafPending=true;requestAnimationFrame(()=>{_uqRafPending=false;_renderUploadQueue();});}
+      _updateQueueProgress(next.id,pct);
     });
     next.abort=abort;
     const ok=await promise;
@@ -3240,6 +3241,25 @@ function _estimateTimeRemaining(){
   if(remaining<60)return Math.ceil(remaining)+'s remaining';
   return Math.ceil(remaining/60)+'m remaining';
 }
+function _updateQueueProgress(itemId,pct){
+  const panel=document.getElementById("uploadQueuePanel");
+  if(!panel)return;
+  const pctEl=panel.querySelector(`[data-uq-pct="${itemId}"]`);
+  if(pctEl)pctEl.textContent=pct+'%';
+  // Update header ETA every 2 seconds max
+  const now=Date.now();
+  if(now-_uqLastFullRender>2000){
+    _uqLastFullRender=now;
+    const etaEl=panel.querySelector('.uq-eta');
+    if(etaEl)etaEl.textContent=_estimateTimeRemaining()||'Uploading...';
+    const titleEl=panel.querySelector('.uq-title');
+    if(titleEl){
+      const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
+      const done=active.filter(i=>i.status==='done').length;
+      titleEl.textContent=`Uploading ${done}/${active.length}`;
+    }
+  }
+}
 function _renderUploadQueue(){
   let panel=document.getElementById("uploadQueuePanel");
   const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
@@ -3263,7 +3283,7 @@ function _renderUploadQueue(){
   html+=`<button class="uq-btn" onclick="_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue()">${collapsed?'▸':'▾'}</button>`;
   html+=`<button class="uq-btn" onclick="_closeUploadQueue()">✕</button>`;
   html+=`</div>`;
-  if(_uploadQueue.processing)html+=`<div class="uq-subtitle"><span>${eta||'Preparing...'}</span><span class="uq-cancel" onclick="_cancelAllQueue()">Cancel all</span></div>`;
+  if(_uploadQueue.processing)html+=`<div class="uq-subtitle"><span class="uq-eta">${eta||'Preparing...'}</span><span class="uq-cancel" onclick="event.stopPropagation();_cancelAllQueue()">Cancel all</span></div>`;
   html+=`</div>`;
   html+=`<div class="upload-queue-list"${collapsed?' style="display:none"':''}>`;
   for(const item of active){
@@ -3272,8 +3292,8 @@ function _renderUploadQueue(){
     else if(item.status==='uploading'){icon='<span class="uq-spin">◌</span>';cls='uq-uploading';}
     else if(item.status==='failed'){icon='❌';cls='uq-failed';}
     else{icon='⭕';cls='uq-pending';}
-    const pct=item.status==='uploading'?`<span class="uq-pct">${item.progress}%</span>`:'';
-    const xBtn=(item.status==='pending'||item.status==='uploading')?`<button class="uq-x" onclick="_cancelQueueItem('${item.id}')">✕</button>`:'';
+    const pct=item.status==='uploading'?`<span class="uq-pct" data-uq-pct="${item.id}">${item.progress}%</span>`:'';
+    const xBtn=(item.status==='pending'||item.status==='uploading')?`<button class="uq-x" onclick="event.stopPropagation();_cancelQueueItem('${item.id}')">✕</button>`:'';
     html+=`<div class="uq-item ${cls}"><span class="uq-icon">${icon}</span><span class="uq-name" title="${esc(item.fileName)}">${esc(item.fileName)}</span>${pct}${xBtn}</div>`;
   }
   html+=`</div>`;
