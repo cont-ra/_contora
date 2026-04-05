@@ -4088,46 +4088,7 @@ function _getFilesRoot(id){
   const rootFiles=(state[id]?.files?.['_root']||[]).map(f=>({
     name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key
   }));
-  const readmeText=`# ${id} — File System Guide
-
-## Folder Structure
-
-source/
-  original/     Raw footage (sequences or single files)
-  preview/      Preview video of source
-  assets/       Assets for the shot (3D, textures, HDRIs, etc.)
-
-versions/
-  preview/      Version previews (video)
-  final/        Final renders (sequences or single files)
-
-## Naming Rules
-
-source/original:
-  Folder:  ${id}/
-  Frames:  ${id}_001.exr, ${id}_002.exr, ...
-
-source/preview:
-  File:    ${id}_prev.mp4
-
-source/assets:
-  File:    ${id}_{description}_asset###.ext
-  Example: ${id}_explosion_asset001.blend
-
-versions/preview:
-  File:    ${id}_prev_v001.mp4, ${id}_prev_v002.mp4, ...
-
-versions/final:
-  Folder:  ${id}_v001/
-  Frames:  ${id}_v001_001.exr, ${id}_v001_002.exr, ...
-  File:    ${id}_v001.mov
-
-## Supported Sequence Formats
-png, jpg, jpeg, exr, dpx, tif, tiff, tga, bmp, hdr, sgi, cin
-`;
-  const readmeBlob=new Blob([readmeText],{type:'text/plain'});
-  const readmeUrl=URL.createObjectURL(readmeBlob);
-  const readme={name:'README.txt',size:_formatSize(readmeText.length),_bytes:readmeText.length,date:'—',url:readmeUrl,locked:true};
+  const readme={name:'README.txt',size:'',_bytes:0,date:'—',url:'#readme:'+id,locked:true};
   return [readme].concat(root).concat(userFolders).concat(rootFiles);
 }
 function _formatSize(bytes){
@@ -4556,7 +4517,8 @@ function _renderShotFiles(id){
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
       const dlSvg=`<svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-      const dlBtn=f.url?(_chatFileMode?`<button class="f-dl" onclick="event.stopPropagation();_downloadFile('${esc(f.url)}','${esc(f.name)}')" title="Download">${dlSvg}</button>`:`<a class="f-dl" href="${f.url}" target="_blank" title="Download">${dlSvg}</a>`):'';
+      const isReadme=f.name==='README.txt'&&f.locked;
+      const dlBtn=(f.url&&!isReadme)?(_chatFileMode?`<button class="f-dl" onclick="event.stopPropagation();_downloadFile('${esc(f.url)}','${esc(f.name)}')" title="Download">${dlSvg}</button>`:`<a class="f-dl" href="${f.url}" target="_blank" title="Download">${dlSvg}</a>`):'';
 
       const fileLocked=f.locked||isLocked;
       const fileDelBtn=(canDel&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
@@ -5527,17 +5489,82 @@ function _showChoice(title,msg,btnA,btnB){
     ov.addEventListener("click",(e)=>{if(e.target===ov){ov.remove();resolve(null);}});
   });
 }
-async function _openReadme(url){
-  try{
-    const r=await fetch(url);
-    const text=await r.text();
-    const ov=document.createElement("div");
-    ov.className="confirm-overlay";
-    ov.innerHTML=`<div class="confirm-box" style="max-width:620px;max-height:80vh;overflow:auto"><div class="confirm-title">README</div><div class="confirm-msg" style="text-align:left"><pre style="white-space:pre-wrap;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.5;color:#c9d1d9;margin:0">${esc(text)}</pre></div><div class="confirm-btns"><button class="confirm-btn cancel" id="confirmOk">Close</button></div></div>`;
-    document.body.appendChild(ov);
-    ov.querySelector("#confirmOk").onclick=()=>ov.remove();
-    ov.addEventListener("click",(e)=>{if(e.target===ov)ov.remove();});
-  }catch(e){}
+function _openReadme(url){
+  const id=url.replace('#readme:','');
+  const s='font-family:"SF Mono","Fira Code",monospace;font-size:12px;';
+  const h='color:#58a6ff;font-size:15px;font-weight:700;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #30363d;';
+  const h2='color:#e6edf3;font-size:13px;font-weight:600;margin:14px 0 6px;';
+  const code='background:#161b22;border:1px solid #30363d;border-radius:4px;padding:2px 6px;color:#3fb950;';
+  const box='background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;margin:6px 0;line-height:1.7;';
+  const dim='color:#8b949e;';
+  const g='color:#3fb950;';
+  const y='color:#d29922;';
+  const html=`<div style="text-align:left;${s}color:#c9d1d9">
+<div style="${h}">FOLDER STRUCTURE</div>
+<div style="${box}">
+<span style="${y}">source/</span><br>
+&nbsp;&nbsp;<span style="${dim}">|--</span> <span style="${g}">original/</span> &nbsp; <span style="${dim}">Raw footage (sequences or single files)</span><br>
+&nbsp;&nbsp;<span style="${dim}">|--</span> <span style="${g}">preview/</span> &nbsp;&nbsp; <span style="${dim}">Preview video of source</span><br>
+&nbsp;&nbsp;<span style="${dim}">|--</span> <span style="${g}">assets/</span> &nbsp;&nbsp;&nbsp; <span style="${dim}">Assets for the shot (3D, textures, HDRIs...)</span><br>
+<br>
+<span style="${y}">versions/</span><br>
+&nbsp;&nbsp;<span style="${dim}">|--</span> <span style="${g}">preview/</span> &nbsp;&nbsp; <span style="${dim}">Version previews (video)</span><br>
+&nbsp;&nbsp;<span style="${dim}">|--</span> <span style="${g}">final/</span> &nbsp;&nbsp;&nbsp;&nbsp; <span style="${dim}">Final renders (sequences or single files)</span>
+</div>
+
+<div style="${h}">NAMING RULES</div>
+
+<div style="${h2}">source / original <span style="${dim}">— raw footage</span></div>
+<div style="${box}">
+<span style="${dim}">Sequence folder:</span> <span style="${code}">${id}/</span><br>
+<span style="${dim}">Frames inside:</span>&nbsp;&nbsp; <span style="${code}">${id}_001.exr</span> <span style="${code}">${id}_002.exr</span> ...<br>
+<span style="${dim}">Single file:</span>&nbsp;&nbsp;&nbsp;&nbsp; <span style="${dim}">any name</span>
+</div>
+
+<div style="${h2}">source / preview <span style="${dim}">— source preview video</span></div>
+<div style="${box}">
+<span style="${dim}">File:</span> <span style="${code}">${id}_prev.mp4</span>
+</div>
+
+<div style="${h2}">source / assets <span style="${dim}">— project files, textures, HDRIs</span></div>
+<div style="${box}">
+<span style="${dim}">Format:</span> <span style="${code}">${id}_{name}_asset###.ext</span><br>
+<span style="${dim}">Example:</span> <span style="${code}">${id}_explosion_asset001.blend</span><br>
+<span style="${dim}">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> <span style="${code}">${id}_smoke_asset002.mov</span>
+</div>
+
+<div style="${h2}">versions / preview <span style="${dim}">— version preview videos</span></div>
+<div style="${box}">
+<span style="${dim}">File:</span> <span style="${code}">${id}_prev_v001.mp4</span> <span style="${code}">${id}_prev_v002.mp4</span> ...<br>
+<span style="${dim}">Versions go in order: v001, v002, v003... No gaps, no going back.</span>
+</div>
+
+<div style="${h2}">versions / final <span style="${dim}">— approved renders</span></div>
+<div style="${box}">
+<span style="${dim}">Sequence folder:</span> <span style="${code}">${id}_v001/</span><br>
+<span style="${dim}">Frames inside:</span>&nbsp;&nbsp; <span style="${code}">${id}_v001_001.exr</span> <span style="${code}">${id}_v001_002.exr</span> ...<br>
+<span style="${dim}">Single file:</span>&nbsp;&nbsp;&nbsp;&nbsp; <span style="${code}">${id}_v001.mov</span><br>
+<span style="${dim}">Version number must match latest uploaded preview.</span>
+</div>
+
+<div style="${h}">SEQUENCE FORMATS</div>
+<div style="${box}">
+<span style="${code}">png</span> <span style="${code}">jpg</span> <span style="${code}">jpeg</span> <span style="${code}">exr</span> <span style="${code}">dpx</span> <span style="${code}">tif</span> <span style="${code}">tiff</span> <span style="${code}">tga</span> <span style="${code}">bmp</span> <span style="${code}">hdr</span> <span style="${code}">sgi</span> <span style="${code}">cin</span>
+</div>
+
+<div style="${h}">PERMISSIONS</div>
+<div style="${box}">
+<span style="${g}">source/</span> &nbsp;&nbsp;&nbsp; upload & delete: <b>admin only</b><br>
+<span style="${g}">versions/</span> &nbsp; upload & delete: <b>admin + assigned artist</b><br>
+<span style="${dim}">Download: everyone</span>
+</div>
+</div>`;
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";
+  ov.innerHTML=`<div class="confirm-box" style="max-width:640px;max-height:85vh;overflow:auto"><div class="confirm-title" style="font-size:16px">README — ${esc(id)}</div><div class="confirm-msg">${html}</div><div class="confirm-btns"><button class="confirm-btn cancel" id="confirmOk">Close</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#confirmOk").onclick=()=>ov.remove();
+  ov.addEventListener("click",(e)=>{if(e.target===ov)ov.remove();});
 }
 function _showAlert(title,msg){
   return new Promise((resolve)=>{
