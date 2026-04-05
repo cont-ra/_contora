@@ -420,7 +420,7 @@
   .note-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: stretch; justify-content: center; padding: 40px; gap: 0; }
   .note-overlay.hidden { display: none; }
   .note-panel { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 100%; max-width: 700px; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
-  .chat-files-panel { background: #161b22; border: 1px solid #30363d; border-left: none; border-radius: 0 12px 12px 0; width: 320px; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .chat-files-panel { background: #161b22; border: 1px solid #30363d; border-right: none; border-radius: 12px 0 0 12px; width: 320px; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
   .chat-files-panel.collapsed { width: 36px; min-width: 36px; }
   .chat-files-panel.collapsed .chat-files-body { display: none; }
   .chat-files-panel.collapsed .chat-files-header span { display: none; }
@@ -436,7 +436,7 @@
   .chat-files-body .files-table td { padding: 6px 6px; font-size: 11px; }
   .chat-files-body .files-drop { padding: 16px; font-size: 11px; min-height: 40px; }
   .chat-files-body .f-grip { font-size: 14px; width: 18px; padding-right: 4px; }
-  .note-panel:has(+ .chat-files-panel:not([style*="display: none"])) { border-radius: 12px 0 0 12px; }
+  .chat-files-panel:not([style*="display: none"]) + .note-panel { border-radius: 0 12px 12px 0; }
   .note-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #21262d; flex-shrink: 0; }
   .note-panel-title { display: flex; align-items: center; gap: 10px; }
   .note-panel-title h3 { color: #f0f6fc; font-size: 16px; font-weight: 600; }
@@ -657,6 +657,10 @@
 </div>
 
 <div class="note-overlay hidden" id="noteOverlay" onclick="if(event.target===this)closeNote()">
+  <div class="chat-files-panel" id="chatFilesPanel" style="display:none">
+    <div class="chat-files-header"><span>📁 Files</span><button class="chat-files-toggle" id="chatFilesToggle" onclick="_toggleChatFiles()">▸</button></div>
+    <div class="chat-files-body" id="chatFilesBody"></div>
+  </div>
   <div class="note-panel">
     <div class="note-panel-header">
       <div class="note-panel-title">
@@ -674,10 +678,6 @@
       <button class="note-cancel-btn" onclick="closeNote()">Cancel</button>
       <button class="note-save-btn" onclick="saveNote()">Save</button>
     </div>
-  </div>
-  <div class="chat-files-panel" id="chatFilesPanel" style="display:none">
-    <div class="chat-files-header"><span>📁 Files</span><button class="chat-files-toggle" id="chatFilesToggle" onclick="_toggleChatFiles()">◂</button></div>
-    <div class="chat-files-body" id="chatFilesBody"></div>
   </div>
 </div>
 
