@@ -98,6 +98,8 @@
   .col-filter-drop .cf-actions { display: flex; gap: 6px; padding: 4px 12px; justify-content: flex-end; }
   .col-filter-drop .cf-actions button { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .col-filter-drop .cf-actions button:hover { background: #30363d; color: #c9d1d9; }
+  .col-filter-drop .cf-apply-btn { background: #1f6feb !important; border-color: #1f6feb !important; color: #fff !important; padding: 5px 16px !important; font-size: 12px !important; font-weight: 600; }
+  .col-filter-drop .cf-apply-btn:hover { background: #388bfd !important; }
   .col-filter-drop .cf-search { width: calc(100% - 24px); margin: 0 12px 4px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box; }
   .col-filter-drop .cf-search:focus { border-color: #1f6feb; }
   thead th:hover { color: #c9d1d9; }
@@ -1119,11 +1121,14 @@ function _labelFor(field,val){
   return val;
 }
 
+// Pending state: checkboxes edit this, Apply commits it to colFilters
+const _cfPending={id:null,cat:null,artist:null,status:null};
+
 function _buildColFilterDropdown(field){
   const el=document.getElementById("cf-"+field);
   if(!el) return;
   const vals=_getUniqueValues(field);
-  const sel=colFilters[field];
+  const sel=_cfPending[field];
   const showSearch=vals.length>10;
   let html="";
   html+=`<div class="cf-actions"><button onclick="event.stopPropagation();cfSelectAll('${field}')">All</button><button onclick="event.stopPropagation();cfSelectNone('${field}')">None</button></div>`;
@@ -1135,47 +1140,53 @@ function _buildColFilterDropdown(field){
     const escaped=v.replace(/'/g,"\\'");
     html+=`<label class="cf-item" data-val="${v}"><input type="checkbox" ${checked} onclick="event.stopPropagation();cfToggle('${field}','${escaped}',this.checked)"> ${label}</label>`;
   });
+  html+=`<div class="cf-divider"></div>`;
+  html+=`<div class="cf-actions"><button class="cf-apply-btn" onclick="event.stopPropagation();cfApply('${field}')">Apply</button></div>`;
   el.innerHTML=html;
 }
 
 function toggleColFilter(field,btn){
   const el=document.getElementById("cf-"+field);
   if(!el) return;
-  // Close all other dropdowns first
+  // Close all other dropdowns first (apply pending on close)
   document.querySelectorAll(".col-filter-drop.open").forEach(d=>{if(d!==el){d.classList.remove("open");d.previousElementSibling?.classList.remove("active");}});
   const opening=!el.classList.contains("open");
   if(opening){
+    // Copy current filter to pending
+    _cfPending[field]=colFilters[field]?new Set(colFilters[field]):null;
     _buildColFilterDropdown(field);
     el.classList.add("open");
     btn.classList.add("active");
   } else {
     el.classList.remove("open");
     btn.classList.remove("active");
+    _updateColFilterBtnState(field);
   }
 }
 
 function cfToggle(field,val,checked){
   const vals=_getUniqueValues(field);
-  if(!colFilters[field]) colFilters[field]=new Set(vals);
-  if(checked) colFilters[field].add(val); else colFilters[field].delete(val);
-  // If all selected, reset to null (= no filter)
-  if(colFilters[field].size===vals.length) colFilters[field]=null;
+  if(!_cfPending[field]) _cfPending[field]=new Set(vals);
+  if(checked) _cfPending[field].add(val); else _cfPending[field].delete(val);
+  if(_cfPending[field].size===vals.length) _cfPending[field]=null;
+}
+
+function cfApply(field){
+  colFilters[field]=_cfPending[field]?new Set(_cfPending[field]):null;
+  const el=document.getElementById("cf-"+field);
+  if(el){el.classList.remove("open");el.previousElementSibling?.classList.remove("active");}
   _updateColFilterBtnState(field);
   render();
 }
 
 function cfSelectAll(field){
-  colFilters[field]=null;
+  _cfPending[field]=null;
   _buildColFilterDropdown(field);
-  _updateColFilterBtnState(field);
-  render();
 }
 
 function cfSelectNone(field){
-  colFilters[field]=new Set();
+  _cfPending[field]=new Set();
   _buildColFilterDropdown(field);
-  _updateColFilterBtnState(field);
-  render();
 }
 
 function cfSearchFilter(field,query){
@@ -4217,8 +4228,16 @@ function _renderShotFiles(id){
   _clearSelection();
   const body=_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody");
   const {items,breadcrumb,currentFolder}=_resolveFilesPath(id);
-  const inSource=_filesPath.length>0&&_filesPath[0]==='source';
-  const isLocked=currentFolder?.locked||inSource;
+  // Check if current folder or any ancestor in path is locked
+  let isLocked=currentFolder?.locked||false;
+  if(!isLocked&&_filesPath.length>0){
+    let ancestors=_getFilesRoot(id);
+    for(const p of _filesPath){
+      const f=ancestors.find(x=>x.name===p&&x.type==='folder');
+      if(f?.locked){isLocked=true;break;}
+      if(f)ancestors=f.children||[];else break;
+    }
+  }
   const canUp=isLocked?(isAdmin()||isClient()):_canUpload(id);
   const canDel=isLocked?isAdmin():_canUpload(id);
   const canMkdir=!isLocked&&_canUpload(id);
