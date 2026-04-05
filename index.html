@@ -1389,7 +1389,23 @@ function _renderPublicUpload(folder,token){
   fi.addEventListener("change",()=>{_pubHandleFiles(folder,Array.from(fi.files));fi.value='';});
   dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
   dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
-  dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_pubHandleFiles(folder,Array.from(e.dataTransfer.files));});
+  dz.addEventListener("drop",async e=>{
+    e.preventDefault();dz.classList.remove("drag-over");
+    // Check for folder drops
+    const items=e.dataTransfer.items;
+    if(items&&items.length&&items[0].webkitGetAsEntry){
+      const entries=[];
+      for(let i=0;i<items.length;i++){const en=items[i].webkitGetAsEntry();if(en)entries.push(en);}
+      const hasDirs=entries.some(en=>en.isDirectory);
+      if(hasDirs){
+        const coll=[];for(const en of entries)coll.push(...await _readEntry(en));
+        const files=coll.filter(c=>c.type==='file').map(c=>c.file);
+        if(files.length)_pubHandleFiles(folder,files);
+        return;
+      }
+    }
+    _pubHandleFiles(folder,Array.from(e.dataTransfer.files));
+  });
   _pubRenderExisting(folder);
 }
 function _pubRenderExisting(folder){
