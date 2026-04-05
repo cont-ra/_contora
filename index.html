@@ -1351,7 +1351,7 @@ async function _initPublicUpload(token){
     if(info.token===token){targetFolder=folder;break;}
   }
   if(!targetFolder){_showPubError('Invalid or expired link');return;}
-  window.history.replaceState({},'',window.location.pathname);
+  // Keep token in URL so page survives refresh
   _renderPublicUpload(targetFolder,token);
 }
 function _showPubError(msg){
