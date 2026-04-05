@@ -3122,7 +3122,7 @@ function _renderShotFiles(id){
   html+=`<div class="files-table-wrap">`;
   html+=`<table class="files-table"><thead><tr><th>Name</th><th>Size</th><th>Last Edit</th><th>Date</th><th></th></tr></thead><tbody>`;
   if(_filesPath.length>0){
-    html+=`<tr data-drop-folder=".." ><td class="f-name" onclick="_filesPath.pop();_renderShotFiles('${id}')"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td></tr>`;
+    html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td></tr>`;
   }
   for(const f of items){
     if(f.type==='folder'){
@@ -3133,7 +3133,7 @@ function _renderShotFiles(id){
       const dragFolderAttr=!f.locked?` draggable="true" data-drag-folder="${esc(f.name)}"`:'';
       const selAttr=!f.locked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       html+=`<tr${dropAttr}${dragFolderAttr}${selAttr}>
-        <td class="f-name" onclick="_filesPath.push('${esc(f.name)}');_renderShotFiles('${id}')"><span class="f-icon">📁</span>${esc(f.name)}${lock}</td>
+        <td class="f-name" data-nav-folder="${esc(f.name)}"><span class="f-icon">📁</span>${esc(f.name)}${lock}</td>
         <td class="f-size">${f.children?.length||0} items</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
@@ -3213,11 +3213,22 @@ function _renderShotFiles(id){
       if(folderName)_moveFolder(id,folderName,row.dataset.dropFolder);
     });
   });
-  // Multi-select click handlers
+  // Double-click to open folders / navigate up
+  body.querySelectorAll("tr[data-nav='up']").forEach(row=>{
+    row.addEventListener("dblclick",()=>{_filesPath.pop();_renderShotFiles(id);});
+    row.style.cursor="pointer";
+  });
+  body.querySelectorAll("td[data-nav-folder]").forEach(td=>{
+    td.closest("tr").addEventListener("dblclick",e=>{
+      if(e.target.closest("button,a"))return;
+      _filesPath.push(td.dataset.navFolder);_renderShotFiles(id);
+    });
+  });
+  // Single click = select
   body.querySelectorAll("tr[data-sel-name]").forEach(row=>{
     row.addEventListener("click",e=>{
-      // Ignore clicks on buttons/links
-      if(e.target.closest("button,a,.f-name"))return;
+      if(e.target.closest("button,a"))return;
+      e.preventDefault();
       const name=row.dataset.selName;
       if(e.shiftKey){_rangeSelect(id,name);}
       else if(e.metaKey||e.ctrlKey){_toggleSelect(name);}
@@ -3235,7 +3246,6 @@ function _renderShotFiles(id){
   });
   // Drop handler for multi-move
   body.querySelectorAll("tr[data-drop-folder]").forEach(row=>{
-    const origDragover=row.ondragover;
     row.addEventListener("dragover",e=>{
       if(e.dataTransfer.types.includes("text/x-multi-move")){
         e.preventDefault();e.dataTransfer.dropEffect="move";
@@ -3251,11 +3261,18 @@ function _renderShotFiles(id){
       }
     });
   });
-  // Click on empty area clears selection
+  // Click on table header or empty area = deselect
+  body.querySelector(".files-table thead")?.addEventListener("click",()=>{_clearSelection();_updateSelectionUI(id);});
   body.querySelector(".files-table-wrap")?.addEventListener("click",e=>{
-    if(e.target.closest("tr"))return;
+    if(e.target.closest("tr:not(thead tr)"))return;
     _clearSelection();_updateSelectionUI(id);
   });
+  // Escape = deselect
+  const escHandler=e=>{if(e.key==='Escape'&&_fileSelection.size>0){e.stopPropagation();_clearSelection();_updateSelectionUI(id);}};
+  document.addEventListener("keydown",escHandler);
+  // Cleanup on re-render
+  body._escHandler&&document.removeEventListener("keydown",body._escHandler);
+  body._escHandler=escHandler;
 }
 function _showNewFolderInput(id){
   const row=document.getElementById("newFolderRow");
