@@ -441,6 +441,12 @@
   .chat-files-body .files-table th:nth-child(5) { display: none; }
   .chat-files-body .files-drop { padding: 16px; font-size: 11px; min-height: 40px; }
   .chat-files-body .f-grip { font-size: 14px; width: 18px; padding-right: 4px; }
+  .cf-tip { position: fixed; z-index: 9999; background: #161b22; border: 1px solid #58a6ff; border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c9d1d9; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 90vw; }
+  .cf-tip .cft-icon { flex-shrink: 0; }
+  .cf-tip .cft-name { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+  .cf-tip .cft-size { color: #8b949e; font-family: 'SF Mono', monospace; font-size: 11px; flex-shrink: 0; }
+  .cf-tip .cft-edit { flex-shrink: 0; }
+  .cf-tip .cft-date { color: #8b949e; font-size: 11px; flex-shrink: 0; }
   .chat-files-panel:not([style*="display: none"]) + .note-panel { border-radius: 0 12px 12px 0; }
   .note-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #21262d; flex-shrink: 0; }
   .note-panel-title { display: flex; align-items: center; gap: 10px; }
@@ -3813,12 +3819,9 @@ function _closeUploadQueue(){
 }
 function _toggleQueueCollapse(){_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue();}
 
-function _buildFileTip(id,name,extra){
-  let tip=name;
-  const last=_lastEdit(id,name);
-  if(last)tip+='\n'+last.action+' by '+last.user+(last.ts?' • '+last.ts:'');
-  else if(extra)tip+='\n'+extra;
-  return ` title="${esc(tip)}"`;
+function _buildFileTip(id,name,size,editCell,date,icon){
+  if(!_chatFileMode)return '';
+  return ` data-tip="${esc(name)}" data-tip-size="${esc(size||'')}" data-tip-edit="${esc(editCell||'')}" data-tip-date="${esc(date||'')}" data-tip-icon="${esc(icon||'')}"`;
 }
 let _chatFileMode=false;
 function _renderShotFiles(id){
@@ -3870,9 +3873,9 @@ function _renderShotFiles(id){
       const fileCount=_countFiles(f.children||[]);
       const folderBytes=_sumBytes(f.children||[]);
       const folderSize=folderBytes?_formatSize(folderBytes):'';
-      const folderTip=_chatFileMode?_buildFileTip(id,f.name,fileCount+' files'+(folderSize?', '+folderSize:'')):'';
-      html+=`<tr${dropAttr}${selAttr}>
-        <td class="f-name" data-nav-folder="${esc(f.name)}"${folderTip}>${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
+      const folderTip=_buildFileTip(id,f.name,folderSize,fileCount?fileCount+' files':'','','📁');
+      html+=`<tr${dropAttr}${selAttr}${folderTip}>
+        <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
         <td class="f-size">${fileCount||''}</td>
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
@@ -3886,9 +3889,9 @@ function _renderShotFiles(id){
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
       const selAttr2=!isLocked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip2=!isLocked?`<span class="f-grip" draggable="true" data-drag-file="${esc(f.name)}">⠿</span>`:'';
-      const fileTip=_chatFileMode?_buildFileTip(id,f.name,(f.size||'')+(f.date?' • '+f.date:'')):'';
-      html+=`<tr${selAttr2}>
-        <td${fileTip}>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
+      const fileTip=_buildFileTip(id,f.name,f.size||'',editCell,f.date||'',_fileIcon(f.name));
+      html+=`<tr${selAttr2}${fileTip}>
+        <td>${grip2}<span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td>
         <td class="f-size"></td>
         <td class="f-size">${f.size||''}</td>
         <td class="f-edit">${editCell}</td>
@@ -4113,7 +4116,30 @@ function _renderShotFiles(id){
   }
   // Render upload queue if active
   if(_uploadQueue.shotId===id&&_uploadQueue.items.length)_renderUploadQueue();
+  // Chat files: hover tooltip
+  if(_chatFileMode)_setupChatFileTips(body);
 }
+let _cfTipEl=null;
+function _setupChatFileTips(container){
+  container.querySelectorAll('tr[data-tip]').forEach(row=>{
+    row.addEventListener('mouseenter',e=>{
+      _removeCfTip();
+      const name=row.dataset.tip,size=row.dataset.tipSize,edit=row.dataset.tipEdit,date=row.dataset.tipDate,icon=row.dataset.tipIcon;
+      const tip=document.createElement('div');tip.className='cf-tip';
+      tip.innerHTML=`<span class="cft-icon">${icon}</span><span class="cft-name">${esc(name)}</span>${size?'<span class="cft-size">'+size+'</span>':''}${edit?'<span class="cft-edit">'+edit+'</span>':''}${date?'<span class="cft-date">'+date+'</span>':''}`;
+      document.body.appendChild(tip);
+      const rr=row.getBoundingClientRect();
+      tip.style.left=rr.left+'px';tip.style.top=(rr.bottom+4)+'px';
+      // Clamp to viewport
+      const tr=tip.getBoundingClientRect();
+      if(tr.right>window.innerWidth)tip.style.left=Math.max(0,window.innerWidth-tr.width-8)+'px';
+      if(tr.bottom>window.innerHeight){tip.style.top=(rr.top-tr.height-4)+'px';}
+      _cfTipEl=tip;
+    });
+    row.addEventListener('mouseleave',_removeCfTip);
+  });
+}
+function _removeCfTip(){if(_cfTipEl){_cfTipEl.remove();_cfTipEl=null;}}
 function _showNewFolderInput(id){
   const row=document.getElementById("newFolderRow");
   if(row){row.style.display="flex";document.getElementById("newFolderName").focus();}
