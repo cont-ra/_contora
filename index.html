@@ -704,7 +704,7 @@
       <span class="shot-id" id="noteShotId"></span>
       <span class="shot-desc" id="noteShotDesc"></span>
     </div>
-    <div class="note-panel-body" id="notePanelBody"></div>
+    <div class="note-panel-body" id="notePanelBody" ondragover="_chatPanelDragOver(event)" ondragleave="_chatPanelDragLeave(event)" ondrop="_chatPanelDrop(event)"></div>
     <div class="note-panel-footer" id="notePanelFooter">
       <button class="note-cancel-btn" onclick="closeNote()">Cancel</button>
       <button class="note-save-btn" onclick="saveNote()">Save</button>
@@ -2293,13 +2293,25 @@ function jumpToPlayerNote(id,versionIdx,frame){
   if(vid&&vid.readyState>=1)setTimeout(doSeek,300);
   else vid?.addEventListener('loadedmetadata',()=>setTimeout(doSeek,100),{once:true});
 }
-function _chatMsgDragOver(e){
+function _chatPanelDragOver(e){
+  if(noteType!=='chat')return;
   e.preventDefault();e.dataTransfer.dropEffect="copy";
-  e.currentTarget.classList.add("drop-highlight");
+  // Highlight appropriate zone
+  const ta=document.getElementById("chatTA");
+  const cm=document.getElementById("chatMessages");
+  if(ta&&ta.contains(e.target)){ta.classList.add("chat-drop-active");if(cm)cm.classList.remove("drop-highlight");}
+  else if(cm){cm.classList.add("drop-highlight");if(ta)ta.classList.remove("chat-drop-active");}
 }
-function _chatMsgDrop(e){
+function _chatPanelDragLeave(e){
+  if(e.currentTarget.contains(e.relatedTarget))return;
+  const ta=document.getElementById("chatTA");if(ta)ta.classList.remove("chat-drop-active");
+  const cm=document.getElementById("chatMessages");if(cm)cm.classList.remove("drop-highlight");
+}
+function _chatPanelDrop(e){
+  if(noteType!=='chat')return;
   e.preventDefault();e.stopPropagation();
-  e.currentTarget.classList.remove("drop-highlight");
+  const ta=document.getElementById("chatTA");if(ta)ta.classList.remove("chat-drop-active");
+  const cm=document.getElementById("chatMessages");if(cm)cm.classList.remove("drop-highlight");
   const file=e.dataTransfer.getData("text/x-file-move");
   const folder=e.dataTransfer.getData("text/x-folder-move");
   const multi=e.dataTransfer.getData("text/x-multi-move");
@@ -2309,11 +2321,16 @@ function _chatMsgDrop(e){
   else if(folder)names=[folder];
   if(!names.length)return;
   const path=_filesPath.length?_filesPath.join('/')+'/':'';
-  // Send each as a file card message
-  for(const n of names){
-    const fullPath=path+n;
-    const tag=`[[filecard:${fullPath}]]`;
-    _sendChatFileCard(tag);
+  // Drop on textarea = inline link, drop on messages = file card
+  const onTA=ta&&(ta.contains(e.target)||e.target===ta);
+  if(onTA){
+    const insert=names.map(n=>`[[file:${path}${n}]]`).join(' ');
+    const pos=ta.selectionStart||0;
+    ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
+    ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
+    ta.dispatchEvent(new Event("input"));
+  } else {
+    for(const n of names)_sendChatFileCard(`[[filecard:${path}${n}]]`);
   }
 }
 function _sendChatFileCard(text){
@@ -2387,7 +2404,7 @@ function renderChat(){
   all.sort((a,b)=>(a.ts||0)-(b.ts||0));
   const msgs=chatMsgs; // keep for reply lookups
   const body=document.getElementById("notePanelBody");
-  let html='<div class="chat-messages" id="chatMessages" ondragover="_chatMsgDragOver(event)" ondragleave="this.classList.remove(\'drop-highlight\')" ondrop="_chatMsgDrop(event)">';
+  let html='<div class="chat-messages" id="chatMessages">';
   if(!all.length) html+='<div class="chat-empty">No messages yet</div>';
   else all.forEach(m=>{
     if(m._isPlayerNote){
@@ -2436,7 +2453,7 @@ function renderChat(){
     html+=`<div class="chat-input-area">`;
     html+=`<div class="chat-editing-hint${editingMsgId!==null?'':' hidden'}" id="chatEditHint"><span>Editing message...</span><button class="chat-editing-close" onclick="cancelEdit()">&times;</button></div>`;
     html+=`<div class="chat-reply-preview hidden" id="chatReplyPreview"><span id="chatReplyText"></span><button class="chat-reply-close" onclick="cancelReply()">&times;</button></div>`;
-    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><button class="chat-todo-btn" onclick="document.getElementById('chatFileInput').click()" title="Attach image">&#128206;</button><input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="chatAttachFile(this)"><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Paste image or type...'}" rows="1" ondragover="_chatTaDragOver(event)" ondragleave="this.classList.remove('chat-drop-active')" ondrop="_chatTaDrop(event)"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
+    html+=`<div class="chat-input-row"><button class="chat-todo-btn${todoMode?' active':''}" onclick="toggleTodoMode()" title="Todo list builder">&#9745;</button><button class="chat-todo-btn" onclick="document.getElementById('chatFileInput').click()" title="Attach image">&#128206;</button><input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="chatAttachFile(this)"><textarea id="chatTA" placeholder="${todoMode?'Each line = todo item. Enter to send list.':'Paste image or type...'}" rows="1"></textarea><button class="chat-send-btn" onclick="sendChat()">&#9654;</button></div>`;
     html+=`<div class="chat-paste-preview hidden" id="chatPastePreview"><img id="chatPasteImg"><button onclick="cancelPaste()" style="position:absolute;top:4px;right:4px;background:#21262d;border:none;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px">&times;</button></div>`;
     html+=`<div class="chat-hint">${todoMode?'Todo mode: each Shift+Enter = new item &nbsp;|&nbsp; Enter — send list':'Enter — send &nbsp;|&nbsp; Shift+Enter — new line &nbsp;|&nbsp; &#9745; — todo builder'}</div>`;
     html+=`</div>`;
