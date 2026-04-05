@@ -4122,7 +4122,7 @@ function _renderShotFiles(id){
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
       const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:'';
       const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
-      const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:'';
+      const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:(_chatFileMode?` data-locked-folder="1"`:'');
       const selAttr=(!f.locked||_chatFileMode)?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip=(!f.locked||_chatFileMode)?`<span class="f-grip${f.locked?' f-grip-locked':''}" draggable="true" data-drag-folder="${esc(f.name)}"${f.locked?' data-locked="1"':''}>⠿</span>`:'';
       const shareIcon=(id==='__admin'&&f.hasShare)?' 🔗':'';
@@ -4300,6 +4300,17 @@ function _renderShotFiles(id){
       if(folderName)_moveFolder(id,folderName,row.dataset.dropFolder);
     });
   });
+  // Locked folder hover during drag — red tooltip warning
+  if(_chatFileMode){
+    body.querySelectorAll("tr[data-locked-folder]").forEach(row=>{
+      row.addEventListener("dragover",()=>{
+        if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');}
+      });
+      row.addEventListener("dragleave",()=>{
+        if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-locked');_cfTipEl.classList.add('drag-active');}
+      });
+    });
+  }
   // Double-click to open folders / navigate up
   body.querySelectorAll("tr[data-nav='up']").forEach(row=>{
     row.addEventListener("dblclick",()=>{_filesPath.pop();_renderShotFiles(id);});
