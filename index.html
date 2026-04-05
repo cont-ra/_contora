@@ -3167,10 +3167,23 @@ async function _deleteFile(id,fileName){
   if(!stateKey)return;
   const ok=await _showConfirm('Delete file?','Delete <b>'+esc(fileName)+'</b>?');
   if(!ok)return;
-  const fileEntry=(state[id]?.files?.[stateKey]||[]).find(f=>f.name===fileName);
-  if(fileEntry?.r2key) await r2Delete(fileEntry.r2key).catch(()=>{});
-  if(state[id]?.files?.[stateKey]){
-    state[id].files[stateKey]=state[id].files[stateKey].filter(f=>f.name!==fileName);
+
+  // Version previews live in state[id].versions, not files
+  if(stateKey==='versions/preview'){
+    const versions=state[id]?.versions||[];
+    const idx=versions.findIndex(v=>v.name===fileName);
+    if(idx>=0){
+      const v=versions[idx];
+      if(v.url){const k=v.url.replace(CDN_BASE+'/','');await r2Delete(k).catch(()=>{});}
+      if(v.thumb){const k=v.thumb.replace(CDN_BASE+'/','');await r2Delete(k).catch(()=>{});}
+      state[id].versions.splice(idx,1);
+    }
+  } else {
+    const fileEntry=(state[id]?.files?.[stateKey]||[]).find(f=>f.name===fileName);
+    if(fileEntry?.r2key) await r2Delete(fileEntry.r2key).catch(()=>{});
+    if(state[id]?.files?.[stateKey]){
+      state[id].files[stateKey]=state[id].files[stateKey].filter(f=>f.name!==fileName);
+    }
   }
   _addFileHistory(id,'deleted',fileName,stateKey);
   saveState(state);
