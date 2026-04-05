@@ -3231,6 +3231,52 @@ async function _uploadFilesToR2(id,fileList){
     return;
   }
 
+  // versions/final — must have _v### matching latest version preview
+  if(stateKey==='versions/final'){
+    const versions=state[id]?.versions||[];
+    const maxV=_getMaxVersion(id,id);
+    if(maxV===0){
+      await _showAlert('No versions yet','Upload a version preview first (via <b>Add Version</b> or <b>versions/preview</b>), then upload the final render.');
+      return;
+    }
+    for(const file of fileList){
+      const {vNum}=_parseVersionName(file.name);
+      const noExt=file.name.replace(/\.[^.]+$/,'');
+      if(vNum===0){
+        await _showAlert('Missing version',
+          `<div style="font-family:'SF Mono',monospace;font-size:14px;background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:6px;padding:8px 12px;margin:8px 0">${esc(file.name)}</div>`+
+          'Final render must include version marker <b>_v###</b><br><br>'+
+          'Latest version: <b>_v'+String(maxV).padStart(3,'0')+'</b><br><br>'+
+          `Example: <span style="color:#3fb950">${esc(id)}_v${String(maxV).padStart(3,'0')}.${file.name.split('.').pop()}</span>`);
+        continue;
+      }
+      if(vNum!==maxV){
+        const ok=await _showConfirm('Version mismatch',
+          `<div style="font-family:'SF Mono',monospace;font-size:14px;background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2);border-radius:6px;padding:8px 12px;margin:8px 0">${esc(file.name)}</div>`+
+          'This file has version <b>_v'+String(vNum).padStart(3,'0')+'</b> but latest preview is <b>_v'+String(maxV).padStart(3,'0')+'</b>.<br><br>'+
+          'Are you sure this is the correct final render?','Upload anyway');
+        if(!ok)continue;
+      }
+      // Proceed with upload
+      if(!state[id])state[id]={};
+      if(!state[id].files)state[id].files={};
+      if(!state[id].files[stateKey])state[id].files[stateKey]=[];
+      if(state[id].files[stateKey].some(f=>f.name===file.name)){
+        await _showAlert('Duplicate','File <b>'+esc(file.name)+'</b> already exists.');
+        continue;
+      }
+      const r2key=r2Folder+'/'+file.name;
+      const ok2=await r2UploadXHR(r2key,file,()=>{});
+      if(ok2){
+        state[id].files[stateKey].push({name:file.name,size:file.size,r2key,author:currentUser?.display||currentUser?.id||'unknown',date:new Date().toISOString().slice(0,10)});
+        _addFileHistory(id,'added',file.name,stateKey);
+      }
+    }
+    saveState(state);
+    _renderShotFiles(id);
+    return;
+  }
+
   // Regular file uploads
   if(!state[id])state[id]={};
   if(!state[id].files)state[id].files={};
