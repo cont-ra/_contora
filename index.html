@@ -507,12 +507,7 @@
   .export-btn { background: #238636; border: 1px solid #2ea043; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-left: auto; }
   .export-btn:hover { background: #2ea043; }
 
-  /* Admin Files */
-  .af-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2500; display: flex; align-items: flex-start; justify-content: center; gap: 12px; padding-top: 5vh; }
-  .af-panel { width: 90vw; max-width: 900px; height: 90vh; background: #161b22; border: 1px solid #30363d; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
-  .af-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; }
-  .af-header h3 { margin: 0; color: #f0f6fc; font-size: 18px; flex: 1; }
-  .af-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  /* Admin Files share overlay */
   .af-share-row { display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; }
   .af-share-row code { flex: 1; font-family: 'SF Mono', monospace; font-size: 12px; color: #3fb950; word-break: break-all; }
   .af-share-row button { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
@@ -1085,224 +1080,49 @@ function toggleAdminMenu(){
 function closeAdminMenu(){const d=document.getElementById("adminMenu");if(d)d.remove();}
 
 // === ADMIN FILES ===
-let _afPath=[];// breadcrumb path for admin files browser
 function _ensureAdminState(){
   if(!state.__admin)state.__admin={};
   if(!state.__admin.folders)state.__admin.folders=[];
   if(!state.__admin.files)state.__admin.files={};
   if(!state.__admin.shares)state.__admin.shares={};
 }
+function _isAdminMode(){return _shotCurrentId==='__admin';}
+// Unified accessors: folders array and files dict for any id (admin or shot)
+function _getFoldersArray(id){
+  if(id==='__admin'){_ensureAdminState();return state.__admin.folders;}
+  if(!state[id])state[id]={};
+  if(!state[id].userFolders)state[id].userFolders=[];
+  return state[id].userFolders;
+}
+function _getFilesDict(id){
+  if(id==='__admin'){_ensureAdminState();return state.__admin.files;}
+  if(!state[id])state[id]={};
+  if(!state[id].files)state[id].files={};
+  return state[id].files;
+}
+function _setFoldersArray(id,arr){
+  if(id==='__admin'){_ensureAdminState();state.__admin.folders=arr;}
+  else{if(!state[id])state[id]={};state[id].userFolders=arr;}
+}
 function _openAdminFiles(){
   if(!isAdmin())return;
-  _afPath=[];
-  const ov=document.createElement("div");
-  ov.className="af-overlay";ov.id="afOverlay";
-  ov.onclick=(e)=>{if(e.target===ov)_closeAdminFiles();};
-  ov.innerHTML=`<div class="af-panel"><div class="af-header"><h3>📁 Admin Files</h3><button class="shot-close" onclick="_closeAdminFiles()">&times;</button></div><div class="af-body" id="afBody"></div></div>`;
-  document.body.appendChild(ov);
-  document.addEventListener("keydown",_afEscHandler);
-  _renderAdminFiles();
+  _shotCurrentId='__admin';_shotTab='files';_filesPath=[];
+  // Configure shot overlay for admin mode
+  document.getElementById("shotId").textContent='Admin Files';
+  document.getElementById("shotCatTag").innerHTML='';
+  document.getElementById("shotDesc").textContent='';
+  document.getElementById("shotTC").textContent='';
+  document.getElementById("shotTabVersions").style.display='none';
+  document.getElementById("shotTabFiles").classList.add("active");
+  document.getElementById("shotTabVersions").classList.remove("active");
+  document.querySelector(".shot-panel").classList.add("files-mode");
+  _renderShotFiles('__admin');
+  document.getElementById("shotOverlay").classList.remove("hidden");
 }
-function _afEscHandler(e){if(e.key==='Escape'){e.stopPropagation();_closeAdminFiles();}}
-function _closeAdminFiles(){
-  const ov=document.getElementById("afOverlay");if(ov)ov.remove();
-  document.removeEventListener("keydown",_afEscHandler);
-}
-function _afCurrentStateKey(){return _afPath.length===0?'_root':_afPath.join('/');}
-function _afCurrentR2Folder(){return _afPath.length===0?'admin':'admin/'+_afPath.join('/');}
-function _afBuildTree(prefix){
-  _ensureAdminState();
-  const result=[];const seen=new Set();
-  for(const uf of state.__admin.folders){
-    let relName;
-    if(prefix===''){if(uf.name.includes('/'))continue;relName=uf.name;}
-    else{if(!uf.name.startsWith(prefix+'/'))continue;relName=uf.name.substring(prefix.length+1);if(relName.includes('/'))continue;}
-    if(seen.has(relName))continue;seen.add(relName);
-    const fullPath=prefix?prefix+'/'+relName:relName;
-    const files=(state.__admin.files[fullPath]||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
-    const subFolders=_afBuildTree(fullPath);
-    const hasShare=!!state.__admin.shares[fullPath];
-    result.push({name:relName,type:'folder',children:files.concat(subFolders),fullPath,hasShare});
-  }
-  return result;
-}
-function _afGetItems(){
-  _ensureAdminState();
-  const prefix=_afPath.join('/');
-  const folders=_afBuildTree(prefix);
-  const stateKey=_afCurrentStateKey();
-  const rootFiles=(state.__admin.files[stateKey]||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
-  return folders.concat(rootFiles);
-}
-function _renderAdminFiles(){
-  const body=document.getElementById("afBody");if(!body)return;
-  _ensureAdminState();
-  const items=_afGetItems();
-  const breadcrumb='admin'+((_afPath.length>0)?(' / '+_afPath.join(' / ')):'');
-  let html=`<div class="files-panel">`;
-  // toolbar
-  html+=`<div class="files-toolbar"><span class="files-path">📁 ${esc(breadcrumb)}</span>`;
-  html+=`<button class="files-btn" onclick="_afShowNewFolder()">📁+ New Folder</button>`;
-  html+=`<button class="files-btn" onclick="_afDownloadAll()" title="Download all"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`;
-  html+=`</div>`;
-  // new folder input
-  html+=`<div class="files-new-folder" id="afNewFolderRow" style="display:none"><span>📁</span><input id="afNewFolderName" placeholder="Folder name..." onkeydown="if(event.key==='Enter')_adminCreateFolder();if(event.key==='Escape')document.getElementById('afNewFolderRow').style.display='none'"><button onclick="_adminCreateFolder()">Create</button><button class="cancel" onclick="document.getElementById('afNewFolderRow').style.display='none'">✕</button></div>`;
-  // table
-  html+=`<div class="files-table-wrap"><table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>Author</th><th>Date</th><th></th></tr></thead><tbody>`;
-  if(_afPath.length>0){
-    html+=`<tr class="af-nav-up" style="cursor:pointer"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
-  }
-  for(const f of items){
-    if(f.type==='folder'){
-      const _countF=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countF(c.children||[]);else n++;}return n;};
-      const _sumB=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumB(c.children||[]);else n+=(c._bytes||0);}return n;};
-      const fc=_countF(f.children||[]),fb=_sumB(f.children||[]);
-      const shareIcon=f.hasShare?'🔗':'';
-      html+=`<tr data-af-folder="${esc(f.name)}"><td class="f-name"><span class="f-icon">📁</span>${esc(f.name)} ${shareIcon}</td><td class="f-size">${fc||''}</td><td class="f-size">${fb?_formatSize(fb):''}</td><td></td><td></td><td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">🔗</button><button class="f-dl" onclick="event.stopPropagation();_adminDownloadFolder('${esc(f.name)}')" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button><button class="f-dl" onclick="event.stopPropagation();_adminDeleteFolder('${esc(f.name)}')" title="Delete">🗑</button></td></tr>`;
-    } else {
-      const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
-      html+=`<tr><td><span class="f-icon">${_fileIcon(f.name)}</span>${esc(f.name)}</td><td class="f-size"></td><td class="f-size">${f.size||''}</td><td class="f-size">${esc(f.author||'')}</td><td class="f-date">${f.date||''}</td><td class="f-actions">${dlBtn}<button class="f-dl" onclick="event.stopPropagation();_adminDeleteFile('${esc(f.name)}')" title="Delete">🗑</button></td></tr>`;
-    }
-  }
-  html+=`</tbody></table>`;
-  if(items.length===0) html+=`<div class="files-empty"><div class="files-empty-icon">📂</div><div>No files</div></div>`;
-  html+=`</div>`;
-  // drop zone
-  html+=`<div class="files-drop" id="afDropZone" onclick="document.getElementById('afUploadInput').click()">Drop files here or click to upload</div>`;
-  html+=`<input type="file" id="afUploadInput" multiple style="display:none" onchange="_adminUpload(this.files);this.value=''">`;
-  html+=`</div>`;
-  body.innerHTML=html;
-  // Bind events
-  const dz=document.getElementById("afDropZone");
-  if(dz){
-    dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
-    dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
-    dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");_adminUpload(e.dataTransfer.files);});
-  }
-  body.querySelectorAll("tr.af-nav-up").forEach(r=>r.addEventListener("dblclick",()=>{_afPath.pop();_renderAdminFiles();}));
-  body.querySelectorAll("tr[data-af-folder]").forEach(r=>{
-    r.style.cursor="pointer";
-    r.addEventListener("dblclick",e=>{if(e.target.closest("button,a"))return;_afPath.push(r.dataset.afFolder);_renderAdminFiles();});
-  });
-}
-function _afShowNewFolder(){const r=document.getElementById("afNewFolderRow");if(r){r.style.display="flex";document.getElementById("afNewFolderName").focus();}}
-function _adminCreateFolder(){
-  const input=document.getElementById("afNewFolderName");
-  const name=(input?.value||'').trim().replace(/[\/\\<>:"|?*]/g,'');
-  if(!name)return;
-  _ensureAdminState();
-  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
-  if(state.__admin.folders.some(f=>f.name===fullPath))return;
-  state.__admin.folders.push({name:fullPath});
-  saveState(state);_renderAdminFiles();
-}
-async function _adminDeleteFolder(name){
-  _ensureAdminState();
-  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
-  const ok=await _showConfirm('Delete folder?','Delete <b>'+esc(name)+'</b> and all files inside?');
-  if(!ok)return;
-  const toDelete=state.__admin.folders.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'));
-  for(const uf of toDelete){
-    const files=state.__admin.files[uf.name]||[];
-    for(const f of files){if(f.r2key)await r2Delete(f.r2key).catch(()=>{});}
-    delete state.__admin.files[uf.name];
-  }
-  state.__admin.folders=state.__admin.folders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/'));
-  // Also delete root files if deleting from root
-  delete state.__admin.shares[fullPath];
-  saveState(state);_renderAdminFiles();
-}
-async function _adminDeleteFile(fileName){
-  _ensureAdminState();
-  const stateKey=_afCurrentStateKey();
-  const ok=await _showConfirm('Delete file?','Delete <b>'+esc(fileName)+'</b>?');
-  if(!ok)return;
-  const fileEntry=(state.__admin.files[stateKey]||[]).find(f=>f.name===fileName);
-  if(fileEntry?.r2key)await r2Delete(fileEntry.r2key).catch(()=>{});
-  if(state.__admin.files[stateKey])state.__admin.files[stateKey]=state.__admin.files[stateKey].filter(f=>f.name!==fileName);
-  saveState(state);_renderAdminFiles();
-}
-async function _adminUpload(fileList){
-  if(!fileList||!fileList.length)return;
-  _ensureAdminState();
-  const stateKey=_afCurrentStateKey();
-  const r2Folder=_afCurrentR2Folder();
-  if(!state.__admin.files[stateKey])state.__admin.files[stateKey]=[];
-  const files=Array.from(fileList);
-  const queue=[];
-  for(const file of files){
-    if(state.__admin.files[stateKey].some(f=>f.name===file.name)){continue;}
-    queue.push({file,r2Key:r2Folder+'/'+file.name,stateKey,meta:{afUpload:true}});
-  }
-  if(!queue.length)return;
-  // Use enqueue system — but we need a special shotId for admin files
-  // We'll use '__admin' as the shotId for the queue
-  _afEnqueueFiles(queue);
-}
-function _afEnqueueFiles(validatedList){
-  if(_uploadQueue.shotId&&_uploadQueue.shotId!=='__admin'){
-    _uploadQueue.items=[];_uploadQueue.processing=false;
-  }
-  _uploadQueue.shotId='__admin';
-  for(const v of validatedList){
-    _uploadQueue.items.push({
-      id:Date.now()+'-'+Math.random().toString(36).substr(2,6),
-      file:v.file,r2Key:v.r2Key,stateKey:v.stateKey,
-      fileName:v.file.name,size:v.file.size,
-      status:'pending',progress:0,abort:null,startTime:null,
-      meta:v.meta||{}
-    });
-  }
-  _renderAfUploadQueue();
-  if(!_uploadQueue.processing)_afProcessQueue();
-}
-async function _afProcessQueue(){
-  _uploadQueue.processing=true;
-  while(true){
-    const next=_uploadQueue.items.find(i=>i.status==='pending');
-    if(!next)break;
-    next.status='uploading';next.startTime=Date.now();
-    _renderAfUploadQueue();
-    const {promise,abort}=r2UploadXHRAbortable(next.r2Key,next.file,(pct)=>{next.progress=pct;_renderAfUploadQueue();});
-    next.abort=abort;
-    const ok=await promise;
-    if(next.status==='cancelled')continue;
-    next.status=ok?'done':'failed';
-    if(ok){
-      _ensureAdminState();
-      const sk=next.stateKey;
-      if(!state.__admin.files[sk])state.__admin.files[sk]=[];
-      state.__admin.files[sk].push({
-        name:next.fileName,size:next.size,r2key:next.r2Key,
-        author:currentUser?.display||currentUser?.id||'unknown',
-        date:new Date().toISOString().slice(0,10)
-      });
-      saveState(state);
-    }
-    _renderAfUploadQueue();
-  }
-  _uploadQueue.processing=false;
-  _renderAdminFiles();
-}
-function _renderAfUploadQueue(){
-  const body=document.getElementById("afBody");if(!body)return;
-  let panel=document.getElementById("afQueuePanel");
-  const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
-  if(active.length===0){if(panel)panel.remove();return;}
-  if(!panel){panel=document.createElement("div");panel.id="afQueuePanel";panel.className="upload-queue-panel";panel.style.cssText="position:fixed;bottom:24px;right:24px;z-index:3000;width:300px";document.body.appendChild(panel);}
-  const done=active.filter(i=>i.status==='done').length;
-  let html=`<div class="upload-queue-header"><div class="uq-top"><span class="uq-title">${done===active.length?'Uploaded':'Uploading'} ${done}/${active.length}</span><button class="uq-btn" onclick="document.getElementById('afQueuePanel')?.remove()">✕</button></div></div><div class="upload-queue-list">`;
-  for(const item of active){
-    let icon;
-    if(item.status==='done')icon='✅';else if(item.status==='uploading')icon='◌';else if(item.status==='failed')icon='❌';else icon='⭕';
-    html+=`<div class="uq-item"><span class="uq-icon">${icon}</span><span class="uq-name" title="${esc(item.fileName)}">${esc(item.fileName)}</span><span class="uq-pct">${item.status==='uploading'?item.progress+'%':''}</span></div>`;
-  }
-  html+=`</div>`;
-  panel.innerHTML=html;
-}
+function _closeAdminFiles(){closeShot();}
 function _adminShareFolder(name){
   _ensureAdminState();
-  const fullPath=_afPath.length===0?name:_afPath.join('/')+'/'+name;
+  const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
   // Ensure folder exists
   if(!state.__admin.folders.some(f=>f.name===fullPath))return;
   let shareInfo=state.__admin.shares[fullPath];
@@ -1311,7 +1131,7 @@ function _adminShareFolder(name){
     shareInfo={token,created:Date.now()};
     state.__admin.shares[fullPath]=shareInfo;
     saveState(state);
-    _renderAdminFiles();
+    _renderShotFiles('__admin');
   }
   const prodBase='https://spark700.github.io/kh-vfx-tracker/';
   const url=prodBase+'?upload='+shareInfo.token;
@@ -1334,19 +1154,7 @@ function _afRevokeShare(fullPath){
   delete state.__admin.shares[fullPath];
   saveState(state);
   document.getElementById("afShareOverlay")?.remove();
-  _renderAdminFiles();
-}
-function _adminDownloadFolder(name){
-  const items=_afGetItems();
-  const folder=items.find(f=>f.name===name&&f.type==='folder');
-  if(!folder||!folder.children)return;
-  const files=_collectFileUrlsWithPath(folder.children,'');
-  _downloadAsZip(files,'admin_'+name);
-}
-function _afDownloadAll(){
-  const items=_afGetItems();
-  const files=_collectFileUrlsWithPath(items,'');
-  _downloadAsZip(files,'admin_files');
+  _renderShotFiles('__admin');
 }
 
 // === PUBLIC UPLOAD PAGE (share link) ===
@@ -3382,7 +3190,7 @@ function openShot(id){
   _renderShotBody(id);
   document.getElementById("shotOverlay").classList.remove("hidden");
 }
-function _canUpload(id){return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
+function _canUpload(id){if(id==='__admin')return isAdmin();return isAdmin()||(isArtist()&&getAssignee(id)===currentUser.id);}
 function _renderShotBody(id){
   const body=document.getElementById("shotBody");
   const versions=state[id]?.versions||[];
@@ -3519,6 +3327,31 @@ function _fetchSize(url,cb){
   _r2HeadSize(r2Key).then(cl=>{_sizeCache[url]=cl;cb(cl);}).catch(()=>{_sizeCache[url]=0;});
 }
 function _getFilesRoot(id){
+  // Admin files: no locked source/versions folders, just user folders + files
+  if(id==='__admin'){
+    _ensureAdminState();
+    const filesDict=state.__admin.files;
+    const folderData=state.__admin.folders;
+    const shares=state.__admin.shares||{};
+    function _buildAdminTree(prefix){
+      const result=[];const seen=new Set();
+      for(const uf of folderData){
+        let relName;
+        if(prefix===''){if(uf.name.includes('/'))continue;relName=uf.name;}
+        else{if(!uf.name.startsWith(prefix+'/'))continue;relName=uf.name.substring(prefix.length+1);if(relName.includes('/'))continue;}
+        if(seen.has(relName))continue;seen.add(relName);
+        const fullPath=prefix?prefix+'/'+relName:relName;
+        const files=(filesDict[fullPath]||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+        const subFolders=_buildAdminTree(fullPath);
+        const hasShare=!!shares[fullPath];
+        result.push({name:relName,type:'folder',locked:false,children:files.concat(subFolders),fullPath,hasShare});
+      }
+      return result;
+    }
+    const userFolders=_buildAdminTree('');
+    const rootFiles=(filesDict['_root']||[]).map(f=>({name:f.name,size:_formatSize(f.size),_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+    return userFolders.concat(rootFiles);
+  }
   const hasSrc=hasGif(id);
   // source: original (raw footage) + preview (source preview video)
   const srcUrl=CDN_BASE+"/video/"+id+".mp4";
@@ -3593,7 +3426,7 @@ function _formatSize(bytes){
 }
 function _resolveFilesPath(id){
   let items=_getFilesRoot(id);
-  let breadcrumb=id;
+  let breadcrumb=id==='__admin'?'admin':id;
   let currentFolder=null;
   for(const p of _filesPath){
     const folder=items.find(f=>f.name===p&&f.type==='folder');
@@ -3651,20 +3484,23 @@ async function _deleteSelected(id){
   const ok=await _showConfirm('Delete '+names.length+' items?','This will delete:<br><br>'+names.map(n=>'• '+esc(n)).join('<br>'));
   if(!ok)return;
   const stateKey=_getCurrentStateKey();
+  const filesDict=_getFilesDict(id);
   for(const name of names){
     // Check if folder
     const {items}=_resolveFilesPath(id);
     const item=items.find(f=>f.name===name);
     if(item?.type==='folder'&&!item.locked){
       // Delete folder contents from R2
-      const files=state[id]?.files?.[name]||[];
+      const files=filesDict[name]||[];
       for(const f of files){if(f.r2key)await r2Delete(f.r2key).catch(()=>{});}
-      if(state[id]?.userFolders)state[id].userFolders=state[id].userFolders.filter(f=>f.name!==name);
-      if(state[id]?.files)delete state[id].files[name];
-      _addFileHistory(id,'deleted',name,'');
+      const foldersArr=_getFoldersArray(id);
+      _setFoldersArray(id,foldersArr.filter(f=>f.name!==name));
+      delete filesDict[name];
+      if(id==='__admin'){_ensureAdminState();delete state.__admin.shares[name];}
+      else _addFileHistory(id,'deleted',name,'');
     } else if(!item?.type||item?.type!=='folder'){
       // Delete file
-      if(stateKey==='versions/preview'){
+      if(id!=='__admin'&&stateKey==='versions/preview'){
         const versions=state[id]?.versions||[];
         const idx=versions.findIndex(v=>v.name===name);
         if(idx>=0){
@@ -3674,11 +3510,11 @@ async function _deleteSelected(id){
           versions.splice(idx,1);
         }
       } else if(stateKey){
-        const entry=(state[id]?.files?.[stateKey]||[]).find(f=>f.name===name);
+        const entry=(filesDict[stateKey]||[]).find(f=>f.name===name);
         if(entry?.r2key)await r2Delete(entry.r2key).catch(()=>{});
-        if(state[id]?.files?.[stateKey])state[id].files[stateKey]=state[id].files[stateKey].filter(f=>f.name!==name);
+        if(filesDict[stateKey])filesDict[stateKey]=filesDict[stateKey].filter(f=>f.name!==name);
       }
-      _addFileHistory(id,'deleted',name,stateKey||'');
+      if(id!=='__admin')_addFileHistory(id,'deleted',name,stateKey||'');
     }
   }
   _clearSelection();
@@ -3751,6 +3587,18 @@ async function _processQueue(){
 function _commitUploadedFile(item){
   const id=_uploadQueue.shotId;
   if(!id)return;
+  if(id==='__admin'){
+    // Admin file upload
+    const filesDict=_getFilesDict(id);
+    if(!filesDict[item.stateKey])filesDict[item.stateKey]=[];
+    filesDict[item.stateKey].push({
+      name:item.fileName,size:item.size,r2key:item.r2Key,
+      author:currentUser?.display||currentUser?.id||'unknown',
+      date:new Date().toISOString().slice(0,10)
+    });
+    _debouncedCommitFlush(id);
+    return;
+  }
   if(!state[id])state[id]={};
   if(item.meta.isVersion){
     // Version preview
@@ -3918,7 +3766,8 @@ function _renderShotFiles(id){
   html+=`</div>`;
   // table
   html+=`<div class="files-table-wrap">`;
-  html+=`<table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>Last Edit</th><th>Date</th><th></th></tr></thead><tbody>`;
+  const editColName=id==='__admin'?'Author':'Last Edit';
+  html+=`<table class="files-table"><thead><tr><th>Name</th><th>Items</th><th>Size</th><th>${editColName}</th><th>Date</th><th></th></tr></thead><tbody>`;
   if(_filesPath.length>0){
     html+=`<tr data-drop-folder=".." data-nav="up"><td class="f-name"><span class="f-icon">⬆️</span>..</td><td></td><td></td><td></td><td></td><td></td></tr>`;
   }
@@ -3930,28 +3779,30 @@ function _renderShotFiles(id){
       if(f.locked)lastWasLocked=true;
       const lock=f.locked?` 🔒`:'';
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
-      const editCell=_renderEditCell(id,f.name);
+      const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:'';
+      const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
       const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:'';
       const selAttr=!f.locked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip=!f.locked?`<span class="f-grip" draggable="true" data-drag-folder="${esc(f.name)}">⠿</span>`:'';
+      const shareIcon=(id==='__admin'&&f.hasShare)?' 🔗':'';
       const _countFiles=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_countFiles(c.children||[]);else n++;}return n;};
       const _sumBytes=(arr)=>{let n=0;for(const c of arr){if(c.type==='folder')n+=_sumBytes(c.children||[]);else n+=(c._bytes||0);}return n;};
       const fileCount=_countFiles(f.children||[]);
       const folderBytes=_sumBytes(f.children||[]);
       const folderSize=folderBytes?_formatSize(folderBytes):'';
       html+=`<tr${dropAttr}${selAttr}>
-        <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}</td>
+        <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
         <td class="f-size">${fileCount||''}</td>
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
-        <td class="f-actions"><button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
+        <td class="f-actions">${shareBtn}<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
       </tr>`;
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
       const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
       const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
-      const editCell=_renderEditCell(id,f.name);
+      const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
       const selAttr2=!isLocked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
       const grip2=!isLocked?`<span class="f-grip" draggable="true" data-drag-file="${esc(f.name)}">⠿</span>`:'';
       html+=`<tr${selAttr2}>
@@ -4193,12 +4044,11 @@ function _createFolder(id){
   const input=document.getElementById("newFolderName");
   const name=(input?.value||'').trim().replace(/[\/\\<>:"|?*]/g,'');
   if(!name)return;
-  if(!state[id])state[id]={};
-  if(!state[id].userFolders)state[id].userFolders=[];
+  const folders=_getFoldersArray(id);
   const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
-  if(state[id].userFolders.some(f=>f.name===fullPath))return;
-  state[id].userFolders.push({name:fullPath});
-  _addFileHistory(id,'added',name,fullPath);
+  if(folders.some(f=>f.name===fullPath))return;
+  folders.push({name:fullPath});
+  if(id!=='__admin')_addFileHistory(id,'added',name,fullPath);
   saveState(state);
   _renderShotFiles(id);
 }
@@ -4206,33 +4056,37 @@ async function _deleteFolder(id,name){
   const fullPath=_filesPath.length===0?name:_filesPath.join('/')+'/'+name;
   const ok=await _showConfirm('Delete folder?','Delete <b>'+esc(name)+'</b> and all files inside?');
   if(!ok)return;
-  if(!state[id])return;
-  const toDelete=state[id].userFolders?.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'))||[];
+  const folders=_getFoldersArray(id);
+  const filesDict=_getFilesDict(id);
+  const toDelete=folders.filter(f=>f.name===fullPath||f.name.startsWith(fullPath+'/'));
   // Count total files to delete
   let totalFiles=0;
-  for(const uf of toDelete) totalFiles+=(state[id]?.files?.[uf.name]||[]).length;
+  for(const uf of toDelete) totalFiles+=(filesDict[uf.name]||[]).length;
   const panel=totalFiles>1?_showOperationProgress('Deleting files',totalFiles):null;
   let done=0;
   for(const uf of toDelete){
-    const files=state[id]?.files?.[uf.name]||[];
+    const files=filesDict[uf.name]||[];
     for(const f of files){
       if(f.r2key) await r2Delete(f.r2key).catch(()=>{});
       done++;
       if(panel)_updateOperationProgress(panel,done,totalFiles,f.name||'');
     }
-    if(state[id].files) delete state[id].files[uf.name];
+    delete filesDict[uf.name];
   }
   if(panel)_removeOperationProgress(panel);
-  if(state[id].userFolders) state[id].userFolders=state[id].userFolders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/'));
-  _addFileHistory(id,'deleted',name,fullPath);
+  _setFoldersArray(id,folders.filter(f=>f.name!==fullPath&&!f.name.startsWith(fullPath+'/')));
+  if(id==='__admin'){_ensureAdminState();delete state.__admin.shares[fullPath];}
+  else _addFileHistory(id,'deleted',name,fullPath);
   saveState(state);
   _renderShotFiles(id);
 }
 function _getCurrentR2Folder(id){
+  if(id==='__admin'){return _filesPath.length===0?'admin':'admin/'+_filesPath.join('/');}
   if(_filesPath.length===0)return 'files/'+id;
   return 'files/'+id+'/'+_filesPath.join('/');
 }
 function _getCurrentStateKey(){
+  if(_shotCurrentId==='__admin'){return _filesPath.length===0?'_root':_filesPath.join('/');}
   if(_filesPath.length===0)return '_root';
   if(_filesPath.length>=2&&_filesPath[0]==='versions')return _filesPath.slice(0,2).join('/');
   if(_filesPath.length>=2&&_filesPath[0]==='source')return _filesPath.slice(0,2).join('/');
@@ -4370,6 +4224,18 @@ async function _uploadFilesToR2(id,fileList){
   if(!r2Folder)return;
   const queue=[];// validated items to enqueue
 
+  // Admin mode: simple upload, no version detection
+  if(id==='__admin'){
+    const filesDict=_getFilesDict(id);
+    if(!filesDict[stateKey])filesDict[stateKey]=[];
+    for(const file of fileList){
+      if(filesDict[stateKey].some(f=>f.name===file.name))continue;
+      queue.push({file,r2Key:r2Folder+'/'+file.name,stateKey,meta:{}});
+    }
+    if(queue.length)_enqueueFiles(id,queue);
+    return;
+  }
+
   // Version preview uploads
   if(stateKey==='versions/preview'){
     for(const file of fileList){
@@ -4450,17 +4316,17 @@ function _readEntry(en){return new Promise(res=>{if(en.isFile)en.file(f=>{res([{
 async function _handleEntriesDrop(id,entries){
   const coll=[];for(const e of entries)coll.push(...await _readEntry(e));if(!coll.length)return;
   const folders=new Set();for(const c of coll){const d=c.path.substring(0,c.path.lastIndexOf('/'));if(d)folders.add(d);}
-  const cp=_filesPath.join('/');if(!state[id])state[id]={};if(!state[id].userFolders)state[id].userFolders=[];
-  for(const f of folders){const fp=cp?cp+'/'+f:f;const pts=fp.split('/');for(let i=1;i<=pts.length;i++){const p=pts.slice(0,i).join('/');if(!state[id].userFolders.some(u=>u.name===p))state[id].userFolders.push({name:p});}}
+  const cp=_filesPath.join('/');const foldersArr=_getFoldersArray(id);
+  for(const f of folders){const fp=cp?cp+'/'+f:f;const pts=fp.split('/');for(let i=1;i<=pts.length;i++){const p=pts.slice(0,i).join('/');if(!foldersArr.some(u=>u.name===p))foldersArr.push({name:p});}}
   const r2B=_getCurrentR2Folder(id),skB=_getCurrentStateKey()||'_root',q=[];
   for(const c of coll){if(c.type!=='file')continue;const d=c.path.substring(0,c.path.lastIndexOf('/'));const sk=d?(cp?cp+'/'+d:d):skB;q.push({file:c.file,r2Key:r2B+'/'+c.path,stateKey:sk,meta:{}});}
   saveState(state);_renderShotFiles(id);if(q.length)_enqueueFiles(id,q);
 }
 async function _handleFolderInput(id,input){
   const files=Array.from(input.files);input.value='';if(!files.length)return;
-  const cp=_filesPath.join('/');if(!state[id])state[id]={};if(!state[id].userFolders)state[id].userFolders=[];
+  const cp=_filesPath.join('/');const foldersArr=_getFoldersArray(id);
   const folders=new Set();for(const f of files){const r=f.webkitRelativePath||f.name;const d=r.substring(0,r.lastIndexOf('/'));if(d)folders.add(d);}
-  for(const f of folders){const fp=cp?cp+'/'+f:f;const pts=fp.split('/');for(let i=1;i<=pts.length;i++){const p=pts.slice(0,i).join('/');if(!state[id].userFolders.some(u=>u.name===p))state[id].userFolders.push({name:p});}}
+  for(const f of folders){const fp=cp?cp+'/'+f:f;const pts=fp.split('/');for(let i=1;i<=pts.length;i++){const p=pts.slice(0,i).join('/');if(!foldersArr.some(u=>u.name===p))foldersArr.push({name:p});}}
   const r2B=_getCurrentR2Folder(id),skB=_getCurrentStateKey()||'_root',q=[];
   for(const f of files){const r=f.webkitRelativePath||f.name;const d=r.substring(0,r.lastIndexOf('/'));const sk=d?(cp?cp+'/'+d:d):skB;q.push({file:f,r2Key:r2B+'/'+r,stateKey:sk,meta:{}});}
   saveState(state);_renderShotFiles(id);if(q.length)_enqueueFiles(id,q);
@@ -4471,8 +4337,9 @@ async function _deleteFile(id,fileName){
   const ok=await _showConfirm('Delete file?','Delete <b>'+esc(fileName)+'</b>?');
   if(!ok)return;
 
-  // Version previews live in state[id].versions, not files
-  if(stateKey==='versions/preview'){
+  const filesDict=_getFilesDict(id);
+  // Version previews live in state[id].versions, not files (not applicable for admin)
+  if(id!=='__admin'&&stateKey==='versions/preview'){
     const versions=state[id]?.versions||[];
     const idx=versions.findIndex(v=>v.name===fileName);
     if(idx>=0){
@@ -4482,13 +4349,13 @@ async function _deleteFile(id,fileName){
       state[id].versions.splice(idx,1);
     }
   } else {
-    const fileEntry=(state[id]?.files?.[stateKey]||[]).find(f=>f.name===fileName);
+    const fileEntry=(filesDict[stateKey]||[]).find(f=>f.name===fileName);
     if(fileEntry?.r2key) await r2Delete(fileEntry.r2key).catch(()=>{});
-    if(state[id]?.files?.[stateKey]){
-      state[id].files[stateKey]=state[id].files[stateKey].filter(f=>f.name!==fileName);
+    if(filesDict[stateKey]){
+      filesDict[stateKey]=filesDict[stateKey].filter(f=>f.name!==fileName);
     }
   }
-  _addFileHistory(id,'deleted',fileName,stateKey);
+  if(id!=='__admin')_addFileHistory(id,'deleted',fileName,stateKey);
   saveState(state);
   _renderShotFiles(id);
 }
@@ -4508,21 +4375,21 @@ async function _moveFile(id,fileName,targetFolder){
   }
   if(srcKey===destKey)return;
   // Find file in source
-  const srcFiles=srcKey==='_root'?(state[id]?.files?.['_root']||[]):(state[id]?.files?.[srcKey]||[]);
+  const filesDict=_getFilesDict(id);
+  const srcFiles=filesDict[srcKey]||[];
   const idx=srcFiles.findIndex(f=>f.name===fileName);
   if(idx<0)return;
   const fileEntry={...srcFiles[idx]};
   // Check duplicate in target
-  if(!state[id].files)state[id].files={};
-  if(!state[id].files[destKey])state[id].files[destKey]=[];
-  if(state[id].files[destKey].some(f=>f.name===fileName)){
+  if(!filesDict[destKey])filesDict[destKey]=[];
+  if(filesDict[destKey].some(f=>f.name===fileName)){
     await _showAlert('Duplicate','<b>'+esc(fileName)+'</b> already exists in <b>'+esc(targetFolder)+'</b>');
     return;
   }
   // Move: remove from source, add to target
   srcFiles.splice(idx,1);
-  state[id].files[destKey].push(fileEntry);
-  _addFileHistory(id,'moved',fileName,srcKey+' → '+destKey);
+  filesDict[destKey].push(fileEntry);
+  if(id!=='__admin')_addFileHistory(id,'moved',fileName,srcKey+' → '+destKey);
   saveState(state);
   _renderShotFiles(id);
 }
@@ -4541,10 +4408,12 @@ async function _moveMultiple(id,names,targetFolder){
 }
 async function _moveFolder(id,folderName,targetFolder){
   if(folderName===targetFolder)return;
-  if(!state[id]?.userFolders)return;
+  const foldersArr=_getFoldersArray(id);
+  const filesDict=_getFilesDict(id);
+  if(!foldersArr.length)return;
   // Current full path of the folder
   const currentPath=_filesPath.length===0?folderName:_filesPath.join('/')+'/'+folderName;
-  const idx=state[id].userFolders.findIndex(f=>f.name===currentPath);
+  const idx=foldersArr.findIndex(f=>f.name===currentPath);
   if(idx<0)return;
 
   let newPath;
@@ -4560,26 +4429,26 @@ async function _moveFolder(id,folderName,targetFolder){
     newPath=targetPath+'/'+folderName;
   }
   // Check no duplicate at destination
-  if(state[id].userFolders.some(f=>f.name===newPath))return;
+  if(foldersArr.some(f=>f.name===newPath))return;
   // Rename folder path
-  state[id].userFolders[idx].name=newPath;
+  foldersArr[idx].name=newPath;
   // Rename files key
-  if(state[id].files?.[currentPath]){
-    state[id].files[newPath]=state[id].files[currentPath];
-    delete state[id].files[currentPath];
+  if(filesDict[currentPath]){
+    filesDict[newPath]=filesDict[currentPath];
+    delete filesDict[currentPath];
   }
   // Also rename any nested subfolders
-  state[id].userFolders.forEach(f=>{
+  foldersArr.forEach(f=>{
     if(f.name.startsWith(currentPath+'/')){
       const oldKey=f.name;
       f.name=newPath+f.name.substring(currentPath.length);
-      if(state[id].files?.[oldKey]){
-        state[id].files[f.name]=state[id].files[oldKey];
-        delete state[id].files[oldKey];
+      if(filesDict[oldKey]){
+        filesDict[f.name]=filesDict[oldKey];
+        delete filesDict[oldKey];
       }
     }
   });
-  _addFileHistory(id,'moved',folderName,currentPath+' → '+newPath);
+  if(id!=='__admin')_addFileHistory(id,'moved',folderName,currentPath+' → '+newPath);
   saveState(state);
   _renderShotFiles(id);
 }
@@ -4640,12 +4509,14 @@ function _downloadFolderByName(id,name){
   const folder=items.find(f=>f.name===name&&f.type==='folder');
   if(!folder||!folder.children)return;
   const files=_collectFileUrlsWithPath(folder.children,'');
-  _downloadAsZip(files,id+'_'+name);
+  const prefix=id==='__admin'?'admin':id;
+  _downloadAsZip(files,prefix+'_'+name);
 }
 function _downloadAllFiles(id){
   const root=_getFilesRoot(id);
   const files=_collectFileUrlsWithPath(root,'');
-  _downloadAsZip(files,id+'_files');
+  const prefix=id==='__admin'?'admin':id;
+  _downloadAsZip(files,prefix+'_files');
 }
 function _fileIcon(name){
   const ext=(name.split('.').pop()||'').toLowerCase();
@@ -4662,6 +4533,8 @@ function closeShot(){
     _cancelAllQueue();
   }
   _uploadQueue.items=[];_uploadQueue.shotId=null;
+  // Restore Versions tab visibility (hidden in admin mode)
+  document.getElementById("shotTabVersions").style.display='';
   _shotCurrentId=null;_shotTab='versions';_filesPath=[];
   document.getElementById("shotTabVersions").classList.add("active");
   document.getElementById("shotTabFiles").classList.remove("active");
