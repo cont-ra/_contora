@@ -4014,13 +4014,21 @@ function _getFilesRoot(id){
     return userFolders.concat(rootFiles);
   }
   const hasSrc=hasGif(id);
-  // source: original (raw footage) + preview (source preview video)
-  const srcUrl=CDN_BASE+"/video/"+id+"_prev.mp4";
-  const srcBytes=_sizeCache[srcUrl]>0?_sizeCache[srcUrl]:0;
-  const sourcePreview=hasSrc?[{name:id+"_prev.mp4",size:srcBytes?_formatSize(srcBytes):'…',_bytes:srcBytes,date:"—",url:srcUrl}]:[];
-  if(hasSrc&&!_sizeCache[srcUrl])_fetchSize(srcUrl,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});
+  // source: original + preview — read from state files, fallback to video/ convention
+  const statePreviewFiles=(state[id]?.files?.['source/preview'])||[];
+  let sourcePreview;
+  if(statePreviewFiles.length){
+    sourcePreview=statePreviewFiles.map(f=>({name:f.name,size:f.size?_formatSize(f.size):'…',_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
+  } else if(hasSrc){
+    const srcUrl=CDN_BASE+"/video/"+id+"_prev.mp4";
+    const srcBytes=_sizeCache[srcUrl]>0?_sizeCache[srcUrl]:0;
+    sourcePreview=[{name:id+"_prev.mp4",size:srcBytes?_formatSize(srcBytes):'…',_bytes:srcBytes,date:"—",url:srcUrl}];
+    if(!_sizeCache[srcUrl])_fetchSize(srcUrl,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});
+  } else { sourcePreview=[]; }
+  const stateOrigFiles=(state[id]?.files?.['source/original'])||[];
+  const sourceOriginal=stateOrigFiles.map(f=>({name:f.name,size:f.size?_formatSize(f.size):'…',_bytes:f.size||0,date:f.date||'—',url:CDN_BASE+'/'+f.r2key,author:f.author||''}));
   const sourceChildren=[
-    {name:"original",type:"folder",locked:true,children:[]},
+    {name:"original",type:"folder",locked:true,children:sourceOriginal},
     {name:"preview",type:"folder",locked:true,children:sourcePreview},
   ];
   // versions: preview (artist uploads _v###) + final (approved renders)
