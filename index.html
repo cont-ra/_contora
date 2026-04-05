@@ -2384,9 +2384,23 @@ function _renderFileCard(path){
   if(entry?.type==='folder'){
     dlBtn=`<button class="cfc-btn" onclick="event.stopPropagation();_downloadCardFolder('${esc(path)}')" title="Download as ZIP">⬇</button>`;
   } else if(entry?.url){
-    dlBtn=`<a class="cfc-btn" href="${entry.url}" target="_blank" onclick="event.stopPropagation()" title="Download">⬇</a>`;
+    dlBtn=`<button class="cfc-btn" onclick="event.stopPropagation();_downloadFile('${esc(entry.url)}','${esc(name)}')" title="Download">⬇</button>`;
   }
   return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${dlBtn}</div></div>`;
+}
+async function _downloadFile(url,name){
+  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
+  const CDN=CDN_BASE;
+  try{
+    const proxyUrl=url.startsWith(CDN)?WORKER+url.substring(CDN.length+1):url;
+    const r=await fetch(proxyUrl);
+    if(!r.ok)throw new Error('fetch failed');
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=name;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }catch(e){window.open(url,'_blank');}
 }
 function _downloadCardFolder(path){
   const id=noteTaskId;if(!id)return;
@@ -4122,7 +4136,9 @@ function _renderShotFiles(id){
       </tr>`;
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
-      const dlBtn=f.url?`<a class="f-dl" href="${f.url}" target="_blank" title="Download"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></a>`:'';
+      const dlSvg=`<svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+      const dlBtn=f.url?(_chatFileMode?`<button class="f-dl" onclick="event.stopPropagation();_downloadFile('${esc(f.url)}','${esc(f.name)}')" title="Download">${dlSvg}</button>`:`<a class="f-dl" href="${f.url}" target="_blank" title="Download">${dlSvg}</a>`):'';
+
       const fileDelBtn=canDel?`<button class="f-dl" onclick="event.stopPropagation();_deleteFile('${id}','${esc(f.name)}')" title="Delete">🗑</button>`:'';
       const editCell=id==='__admin'?esc(f.author||''):_renderEditCell(id,f.name);
       const selAttr2=!isLocked?` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`:'';
