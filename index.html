@@ -636,6 +636,7 @@
   .pub-dup-btns button.primary:hover { background: #388bfd; }
 </style>
 <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js"></script>
 <script src="ffmpeg/ffmpeg.js"></script>
 </head>
 <body>
@@ -5186,40 +5187,33 @@ function _collectFileUrlsWithPath(items,prefix){
 }
 async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
-  let done=0,ok=0;
+  const {makeZip}=await import("https://cdn.jsdelivr.net/npm/client-zip/index.js");
+  let done=0;
   const panel=_showOperationProgress('Downloading & zipping',files.length);
-  const zip=new JSZip();
   const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
-  for(const f of files){
-    try{
-      const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
-      const resp=await fetch(proxyUrl);
-      if(!resp.ok)throw new Error('fetch failed');
-      zip.file(f.path,await resp.blob());
-      ok++;
-    }catch(e){}
-    done++;
-    _updateOperationProgress(panel,done,files.length,f.name||f.path);
-  }
-  if(ok===0){
-    _removeOperationProgress(panel);
+  async function* generateFiles(){
     for(const f of files){
-      const a=document.createElement('a');
-      a.href=f.url;a.download=f.name;a.target='_blank';a.rel='noopener';
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
-      await new Promise(r=>setTimeout(r,300));
+      const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
+      try{
+        const resp=await fetch(proxyUrl);
+        if(!resp.ok)throw new Error('fetch failed');
+        done++;
+        _updateOperationProgress(panel,done,files.length,f.name||f.path);
+        yield{name:f.path,input:resp};
+      }catch(e){
+        done++;
+        _updateOperationProgress(panel,done,files.length,f.name||f.path);
+      }
     }
-    return;
   }
-  _updateOperationLabel(panel,'Packing ZIP...');
-  const content=await zip.generateAsync({type:'blob',compression:'STORE'}, (meta)=>{
-    _updateOperationProgress(panel,Math.round(meta.percent),100,'Packing...');
-  });
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(content);
-  a.download=zipName+'.zip';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
+  try{
+    const zipStream=makeZip(generateFiles());
+    const fileStream=streamSaver.createWriteStream(zipName+'.zip');
+    await zipStream.pipeTo(fileStream);
+  }catch(e){
+    console.error('ZIP stream error:',e);
+    await _showAlert('Error','Failed to create ZIP: '+e.message);
+  }
   _removeOperationProgress(panel);
 }
 function _downloadFolderByName(id,name){
