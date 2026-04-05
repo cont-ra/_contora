@@ -5191,9 +5191,11 @@ async function _downloadAsZip(files,zipName){
   const fileStream=streamSaver.createWriteStream(zipName+'.zip');
   const writer=fileStream.getWriter();
   const zip=new JSZip();
+  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
   for(const f of files){
     try{
-      const resp=await fetch(f.url);
+      const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
+      const resp=await fetch(proxyUrl);
       if(!resp.ok)throw new Error('fetch failed');
       zip.file(f.path,await resp.blob());
       ok++;
