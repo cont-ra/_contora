@@ -127,8 +127,7 @@
   .shot-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
   .shot-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-content: flex-start; align-items: stretch; }
   .files-panel { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 0; min-height: 0; justify-content: space-between; position: relative; }
-  .shot-body.has-upload-queue { flex-wrap: nowrap; }
-  .upload-queue-panel { flex: 0 0 300px; display: flex; flex-direction: column; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; max-height: 100%; overflow: hidden; }
+  .upload-queue-panel { position: fixed; bottom: 20px; right: 20px; width: 340px; max-height: 400px; display: flex; flex-direction: column; background: #0d1117; border: 1px solid #30363d; border-radius: 10px; overflow: hidden; z-index: 9000; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
   .upload-queue-header { padding: 10px 14px; border-bottom: 1px solid #30363d; }
   .upload-queue-header .uq-top { display: flex; align-items: center; gap: 6px; }
   .upload-queue-header .uq-title { flex: 1; font-size: 13px; font-weight: 600; color: #c9d1d9; }
@@ -158,9 +157,10 @@
   .files-btn:hover { background: rgba(255,255,255,0.15); }
   .files-btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
   .files-btn.primary:hover { background: #388bfd; }
-  .files-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .files-table { width: 100%; border-collapse: collapse; }
   .files-table th { text-align: left; padding: 8px 10px; font-size: 11px; color: #8b949e; font-weight: 600; border-bottom: 1px solid #30363d; text-transform: uppercase; letter-spacing: .5px; }
-  .files-table td { padding: 8px 10px; font-size: 13px; color: #c9d1d9; border-bottom: 1px solid #21262d; }
+  .files-table td { padding: 8px 10px; font-size: 13px; color: #c9d1d9; }
+  .files-table tr:not(.f-locked-sep) + tr:not(.f-locked-sep) td { border-top: 1px solid #21262d; }
   .files-table tr:hover td { background: #21262d; }
   .files-table .f-icon { font-size: 16px; margin-right: 6px; }
   .files-table .f-name { cursor: pointer; }
@@ -3241,30 +3241,29 @@ function _estimateTimeRemaining(){
   return Math.ceil(remaining/60)+'m remaining';
 }
 function _renderUploadQueue(){
-  const body=document.getElementById("shotBody");
-  if(!body)return;
   let panel=document.getElementById("uploadQueuePanel");
   const active=_uploadQueue.items.filter(i=>i.status!=='cancelled');
   if(active.length===0){
     if(panel)panel.remove();
-    body.classList.remove("has-upload-queue");
     return;
   }
-  body.classList.add("has-upload-queue");
   if(!panel){
     panel=document.createElement("div");panel.id="uploadQueuePanel";panel.className="upload-queue-panel";
-    body.appendChild(panel);
+    document.body.appendChild(panel);
   }
+  // Preserve scroll position
+  const list=panel.querySelector(".upload-queue-list");
+  const scrollTop=list?list.scrollTop:0;
   const done=active.filter(i=>i.status==='done').length;
   const total=active.length;
   const eta=_estimateTimeRemaining();
   const collapsed=_uploadQueue.collapsed;
   let html=`<div class="upload-queue-header"><div class="uq-top">`;
-  html+=`<span class="uq-title">Uploading ${done}/${total} files</span>`;
+  html+=`<span class="uq-title">${done===total?'Uploaded':'Uploading'} ${done}/${total}</span>`;
   html+=`<button class="uq-btn" onclick="_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue()">${collapsed?'▸':'▾'}</button>`;
   html+=`<button class="uq-btn" onclick="_closeUploadQueue()">✕</button>`;
   html+=`</div>`;
-  if(eta||_uploadQueue.processing)html+=`<div class="uq-subtitle"><span>${eta||'Preparing...'}</span><span class="uq-cancel" onclick="_cancelAllQueue()">Cancel all</span></div>`;
+  if(_uploadQueue.processing)html+=`<div class="uq-subtitle"><span>${eta||'Preparing...'}</span><span class="uq-cancel" onclick="_cancelAllQueue()">Cancel all</span></div>`;
   html+=`</div>`;
   html+=`<div class="upload-queue-list"${collapsed?' style="display:none"':''}>`;
   for(const item of active){
@@ -3279,6 +3278,9 @@ function _renderUploadQueue(){
   }
   html+=`</div>`;
   panel.innerHTML=html;
+  // Restore scroll
+  const newList=panel.querySelector(".upload-queue-list");
+  if(newList)newList.scrollTop=scrollTop;
 }
 function _closeUploadQueue(){
   if(_uploadQueue.items.some(i=>i.status==='uploading')){
@@ -3367,11 +3369,6 @@ function _renderShotFiles(id){
   }
   html+=`</div>`;
   body.innerHTML=html;
-  // Remove border only from last locked row before dashed separator
-  body.querySelectorAll('tr.f-locked-sep').forEach(sep=>{
-    const prev=sep.previousElementSibling;
-    if(prev)prev.querySelectorAll('td').forEach(td=>td.style.borderBottom='none');
-  });
   // drag & drop events
   const dz=document.getElementById("filesDropZone");
   if(dz){
