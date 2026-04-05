@@ -3186,41 +3186,37 @@ function _renderShotFiles(id){
     });
   }
   // Internal drag & drop: file/folder → folder
-  body.querySelectorAll(".f-grip[data-drag-file]").forEach(grip=>{
+  function _setupGripDrag(grip,dataKey){
     grip.addEventListener("dragstart",e=>{
       e.stopPropagation();
       const row=grip.closest("tr");
-      const name=grip.dataset.dragFile;
-      // Multi-drag if selected
+      const name=grip.dataset[dataKey];
       if(_fileSelection.size>1&&_fileSelection.has(name)){
         e.dataTransfer.setData("text/x-multi-move",JSON.stringify([..._fileSelection]));
+        // Custom drag image showing count
+        const badge=document.createElement("div");
+        badge.textContent=_fileSelection.size+" items";
+        badge.style.cssText="background:#1f6feb;color:#fff;padding:6px 14px;border-radius:6px;font-size:13px;position:fixed;top:-100px";
+        document.body.appendChild(badge);
+        e.dataTransfer.setDragImage(badge,40,16);
+        setTimeout(()=>badge.remove(),0);
       } else {
-        e.dataTransfer.setData("text/x-file-move",name);
+        e.dataTransfer.setData(dataKey==='dragFile'?'text/x-file-move':'text/x-folder-move',name);
+        // Use row as drag image
+        e.dataTransfer.setDragImage(row,40,row.offsetHeight/2);
       }
       e.dataTransfer.effectAllowed="move";
       row.classList.add("f-dragging");
+      if(_fileSelection.size>1&&_fileSelection.has(name)){
+        body.querySelectorAll("tr.f-selected").forEach(r=>r.classList.add("f-dragging"));
+      }
     });
     grip.addEventListener("dragend",()=>{
       body.querySelectorAll("tr.f-dragging").forEach(r=>r.classList.remove("f-dragging"));
     });
-  });
-  body.querySelectorAll(".f-grip[data-drag-folder]").forEach(grip=>{
-    grip.addEventListener("dragstart",e=>{
-      e.stopPropagation();
-      const row=grip.closest("tr");
-      const name=grip.dataset.dragFolder;
-      if(_fileSelection.size>1&&_fileSelection.has(name)){
-        e.dataTransfer.setData("text/x-multi-move",JSON.stringify([..._fileSelection]));
-      } else {
-        e.dataTransfer.setData("text/x-folder-move",name);
-      }
-      e.dataTransfer.effectAllowed="move";
-      row.classList.add("f-dragging");
-    });
-    grip.addEventListener("dragend",()=>{
-      body.querySelectorAll("tr.f-dragging").forEach(r=>r.classList.remove("f-dragging"));
-    });
-  });
+  }
+  body.querySelectorAll(".f-grip[data-drag-file]").forEach(g=>_setupGripDrag(g,'dragFile'));
+  body.querySelectorAll(".f-grip[data-drag-folder]").forEach(g=>_setupGripDrag(g,'dragFolder'));
   body.querySelectorAll("tr[data-drop-folder]").forEach(row=>{
     row.addEventListener("dragover",e=>{
       const isFile=e.dataTransfer.types.includes("text/x-file-move");
@@ -3251,9 +3247,11 @@ function _renderShotFiles(id){
       _filesPath.push(td.dataset.navFolder);_renderShotFiles(id);
     });
   });
-  // Single click = select
+  // Single click = select (skip if just finished rect-select)
+  let _skipClick=false;
   body.querySelectorAll("tr[data-sel-name]").forEach(row=>{
     row.addEventListener("click",e=>{
+      if(_skipClick){_skipClick=false;return;}
       if(e.target.closest("button,a"))return;
       e.preventDefault();
       const name=row.dataset.selName;
@@ -3329,7 +3327,7 @@ function _renderShotFiles(id){
         document.removeEventListener("mousemove",onMove);
         document.removeEventListener("mouseup",onUp);
         if(rectEl){rectEl.remove();rectEl=null;}
-        if(isRect)_updateSelectionUI(id);
+        if(isRect){_updateSelectionUI(id);_skipClick=true;setTimeout(()=>_skipClick=false,50);}
         isRect=false;
       };
       document.addEventListener("mousemove",onMove);
