@@ -87,9 +87,10 @@
   table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
   thead th { background: #21262d; padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363d; cursor: pointer; user-select: none; white-space: nowrap; position: relative; }
   /* Column filter dropdowns */
-  .col-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 4px; border: none; background: transparent; color: #484f58; cursor: pointer; font-size: 10px; padding: 0; vertical-align: middle; border-radius: 3px; transition: .15s; }
-  .col-filter-btn:hover, .col-filter-btn.active { color: #58a6ff; background: #1f6feb22; }
-  .col-filter-drop { position: absolute; top: 100%; left: 0; z-index: 6000; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 6px 0; min-width: 180px; max-height: 320px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); display: none; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .col-filter-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-left: 2px; border: none; background: transparent; color: #8b949e; cursor: pointer; font-size: 12px; padding: 0; vertical-align: middle; border-radius: 3px; transition: .15s; }
+  .col-filter-btn:hover { color: #58a6ff; background: #1f6feb22; }
+  .col-filter-btn.active { color: #f0883e; background: #f0883e22; }
+  .col-filter-drop { position: fixed; z-index: 6000; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 6px 0; min-width: 180px; max-height: 320px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.6); display: none; text-transform: none; letter-spacing: 0; font-weight: 400; }
   .col-filter-drop.open { display: block; }
   .col-filter-drop label { display: flex; align-items: center; gap: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: #c9d1d9; white-space: nowrap; }
   .col-filter-drop label:hover { background: #21262d; }
@@ -769,13 +770,13 @@
   <thead><tr>
     <th style="width:30px;cursor:pointer" onclick="togglePrioSort()" id="prioSortTh" title="Sort by priority">⚑</th>
     <th onclick="sortTable(0)" data-col="0" data-label="#">#</th>
-    <th onclick="sortTable(1)" data-col="1" data-label="ID">ID <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('id',this)" title="Filter IDs">&#9662;</button><div class="col-filter-drop" id="cf-id" onclick="event.stopPropagation()"></div></th>
+    <th data-col="1" data-label="ID"><span onclick="sortTable(1)" style="cursor:pointer">ID</span> <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('id',this)" title="Filter IDs">&#9662;</button><div class="col-filter-drop" id="cf-id" onclick="event.stopPropagation()"></div></th>
     <th>Shot Info</th>
-    <th onclick="sortTable(3)" data-col="3" data-label="Category">Category <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('cat',this)" title="Filter categories">&#9662;</button><div class="col-filter-drop" id="cf-cat" onclick="event.stopPropagation()"></div></th>
+    <th data-col="3" data-label="Category"><span onclick="sortTable(3)" style="cursor:pointer">Category</span> <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('cat',this)" title="Filter categories">&#9662;</button><div class="col-filter-drop" id="cf-cat" onclick="event.stopPropagation()"></div></th>
     <th onclick="sortTable(4)" data-col="4" data-label="TC In">TC In</th>
     <th onclick="sortTable(5)" data-col="5" data-label="TC Out">TC Out</th>
-    <th onclick="sortTable(6)" data-col="6" data-label="Artist">Artist <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('artist',this)" title="Filter artists">&#9662;</button><div class="col-filter-drop" id="cf-artist" onclick="event.stopPropagation()"></div></th>
-    <th onclick="sortTable(7)" data-col="7" data-label="Status">Status <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('status',this)" title="Filter statuses">&#9662;</button><div class="col-filter-drop" id="cf-status" onclick="event.stopPropagation()"></div></th>
+    <th data-col="6" data-label="Artist"><span onclick="sortTable(6)" style="cursor:pointer">Artist</span> <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('artist',this)" title="Filter artists">&#9662;</button><div class="col-filter-drop" id="cf-artist" onclick="event.stopPropagation()"></div></th>
+    <th data-col="7" data-label="Status"><span onclick="sortTable(7)" style="cursor:pointer">Status</span> <button class="col-filter-btn" onclick="event.stopPropagation();toggleColFilter('status',this)" title="Filter statuses">&#9662;</button><div class="col-filter-drop" id="cf-status" onclick="event.stopPropagation()"></div></th>
     <th class="admin-col">Admin</th>
     <th>Chat</th>
   </tr></thead>
@@ -801,6 +802,7 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   const pulled=await _pullRemote();if(pulled){runMigrations();if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
   document.getElementById("adminGear").style.display=isAdmin()?'':'none';
+  _loadColFilters();
   render();
 }
 function logout(){sessionStorage.removeItem("kh_user");currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
@@ -1174,9 +1176,32 @@ function cfToggle(field,val,checked){
 function cfApply(field){
   colFilters[field]=_cfPending[field]?new Set(_cfPending[field]):null;
   const el=document.getElementById("cf-"+field);
-  if(el){el.classList.remove("open");el.previousElementSibling?.classList.remove("active");}
+  if(el){el.classList.remove("open");}
   _updateColFilterBtnState(field);
+  _saveColFilters();
   render();
+}
+
+function _colFilterStorageKey(){
+  return "cf_"+(currentUser?currentUser.id:"guest");
+}
+function _saveColFilters(){
+  const data={};
+  for(const f of ["id","cat","artist","status"]){
+    data[f]=colFilters[f]?[...colFilters[f]]:null;
+  }
+  try{localStorage.setItem(_colFilterStorageKey(),JSON.stringify(data));}catch(e){}
+}
+function _loadColFilters(){
+  try{
+    const raw=localStorage.getItem(_colFilterStorageKey());
+    if(!raw) return;
+    const data=JSON.parse(raw);
+    for(const f of ["id","cat","artist","status"]){
+      colFilters[f]=data[f]?new Set(data[f]):null;
+      _updateColFilterBtnState(f);
+    }
+  }catch(e){}
 }
 
 function cfSelectAll(field){
@@ -4220,7 +4245,6 @@ function _closeUploadQueue(){
 function _toggleQueueCollapse(){_uploadQueue.collapsed=!_uploadQueue.collapsed;_renderUploadQueue();}
 
 function _buildFileTip(id,name,size,editCell,date,icon){
-  if(!_chatFileMode)return '';
   return ` data-tip="${esc(name)}" data-tip-size="${esc(size||'')}" data-tip-edit="${esc(editCell||'')}" data-tip-date="${esc(date||'')}" data-tip-icon="${esc(icon||'')}"`;
 }
 let _chatFileMode=false;
@@ -4367,65 +4391,29 @@ function _renderShotFiles(id){
       document.body.appendChild(blank);
       e.dataTransfer.setDragImage(blank,0,0);
       setTimeout(()=>blank.remove(),0);
-      // In chat mode: reuse cf-tip as drag ghost
-      if(_chatFileMode){
-        _cfDragging=true;
-        const tipRow=row.closest('tr[data-tip]');
-        const tipClass=isLocked?'drag-locked':'drag-active';
-        if(_cfTipEl){
-          _cfTipEl.classList.add(tipClass);
-          _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
-        } else if(tipRow){
-          _showCfTipForRow(tipRow,true);
-          if(_cfTipEl){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add(tipClass);_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
-        }
-        _dragGhost=null;
-      } else {
-      // Clone row(s) as ghost
-      _dragGhost=document.createElement("div");
-      _dragGhost.className="f-drag-ghost";
-      const table=document.createElement("table");table.className="files-table";
-      table.style.cssText="margin:0;width:auto;min-width:200px";
-      if(isMulti){
-        const rows=body.querySelectorAll("tr.f-selected");
-        let count=0;
-        rows.forEach(r=>{
-          if(count>=4)return;
-          const clone=r.cloneNode(true);
-          clone.querySelectorAll(".f-grip,.f-dl,.f-actions button,.f-actions a").forEach(el=>el.remove());
-          clone.classList.remove("f-selected","f-dragging");
-          table.appendChild(clone);
-          count++;
-        });
-        if(_fileSelection.size>4){
-          const extra=document.createElement("tr");
-          extra.innerHTML=`<td colspan="6" style="color:#8b949e;font-size:11px;padding:4px 10px">+${_fileSelection.size-4} more</td>`;
-          table.appendChild(extra);
-        }
-      } else {
-        const clone=row.cloneNode(true);
-        clone.querySelectorAll(".f-grip,.f-dl,.f-actions button,.f-actions a").forEach(el=>el.remove());
-        table.appendChild(clone);
+      // Unified tooltip drag ghost (all file browsers)
+      _cfDragging=true;
+      const tipRow=row.closest('tr[data-tip]');
+      const tipClass=isLocked?'drag-locked':'drag-active';
+      if(_cfTipEl){
+        _cfTipEl.classList.add(tipClass);
+        _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
+      } else if(tipRow){
+        _showCfTipForRow(tipRow,true);
+        if(_cfTipEl){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add(tipClass);_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
       }
-      _dragGhost.appendChild(table);
-      _dragGhost.style.transform=`translate(${e.clientX+14}px,${e.clientY-14}px)`;
-      document.body.appendChild(_dragGhost);
-      }
+      _dragGhost=null;
       row.classList.add("f-dragging");
       if(isMulti) body.querySelectorAll("tr.f-selected").forEach(r=>r.classList.add("f-dragging"));
     });
     grip.addEventListener("drag",e=>{
       if(e.clientX<=0)return;
-      if(_chatFileMode&&_cfTipEl){
-        _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
-      } else if(_dragGhost){
-        _dragGhost.style.transform=`translate(${e.clientX+14}px,${e.clientY-14}px)`;
-      }
+      if(_cfTipEl){_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
     });
     grip.addEventListener("dragend",()=>{
       body.querySelectorAll("tr.f-dragging").forEach(r=>r.classList.remove("f-dragging"));
-      if(_chatFileMode){_removeCfTip();}
-      else if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
+      _removeCfTip();
+      // _removeCfTip already called above
     });
   }
   body.querySelectorAll(".f-grip[data-drag-file]").forEach(g=>_setupGripDrag(g,'dragFile'));
@@ -4438,8 +4426,8 @@ function _renderShotFiles(id){
       if(isFolder&&row.dataset.dropFolder===row.dataset.dragFolder)return;
       e.preventDefault();e.dataTransfer.dropEffect="move";
       row.classList.add("f-drop-target");
-      // In chat mode: show red tooltip if move would fail (locked context)
-      if(_chatFileMode&&_cfTipEl&&_cfDragging){
+      // Show red tooltip if move would fail (locked context)
+      if(_cfTipEl&&_cfDragging){
         if(isLocked||e.dataTransfer.types.includes('text/x-locked')){
           _cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');
         } else {
@@ -4450,7 +4438,7 @@ function _renderShotFiles(id){
     row.addEventListener("dragleave",()=>{
       row.classList.remove("f-drop-target");
       // Revert tooltip to blue
-      if(_chatFileMode&&_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-locked');_cfTipEl.classList.add('drag-active');}
+      if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-locked');_cfTipEl.classList.add('drag-active');}
     });
     row.addEventListener("drop",e=>{
       e.preventDefault();row.classList.remove("f-drop-target");
@@ -4462,21 +4450,18 @@ function _renderShotFiles(id){
     });
   });
   // Locked folder/rows hover during drag — red tooltip warning
-  if(_chatFileMode){
-    body.querySelectorAll("tr[data-locked-folder]").forEach(row=>{
-      row.addEventListener("dragover",()=>{
-        if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');}
-      });
-      row.addEventListener("dragleave",()=>{
-        if(_cfTipEl&&_cfDragging&&!isLocked){_cfTipEl.classList.remove('drag-locked');_cfTipEl.classList.add('drag-active');}
-      });
+  body.querySelectorAll("tr[data-locked-folder]").forEach(row=>{
+    row.addEventListener("dragover",()=>{
+      if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');}
     });
-    // If entire context is locked, tooltip stays red over any row
-    if(isLocked){
-      body.addEventListener("dragover",()=>{
-        if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');}
-      },true);
-    }
+    row.addEventListener("dragleave",()=>{
+      if(_cfTipEl&&_cfDragging&&!isLocked){_cfTipEl.classList.remove('drag-locked');_cfTipEl.classList.add('drag-active');}
+    });
+  });
+  if(isLocked){
+    body.addEventListener("dragover",()=>{
+      if(_cfTipEl&&_cfDragging){_cfTipEl.classList.remove('drag-active');_cfTipEl.classList.add('drag-locked');}
+    },true);
   }
   // Double-click to open folders / navigate up
   body.querySelectorAll("tr[data-nav='up']").forEach(row=>{
@@ -4580,7 +4565,7 @@ function _renderShotFiles(id){
   // Render upload queue if active
   if(_uploadQueue.shotId===id&&_uploadQueue.items.length)_renderUploadQueue();
   // Chat files: hover tooltip
-  if(_chatFileMode)_setupChatFileTips(body);
+  _setupChatFileTips(body);
 }
 let _cfTipEl=null;
 function _setupChatFileTips(container){
