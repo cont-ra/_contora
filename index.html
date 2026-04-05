@@ -3234,6 +3234,8 @@ function thumbPreviewStop(wrap){
   if(playIcon)playIcon.style.display='';
 }
 let _gifPaused=false, _gifUpdater=null, _gifCurrentId=null, _videoFPS=24, _gifVersionIdx=-1;
+function _setPlayerCache(id,idx){try{const c=JSON.parse(localStorage.getItem('kh_player_cache')||'{}');c[id]=idx;localStorage.setItem('kh_player_cache',JSON.stringify(c));}catch(e){}}
+function _getPlayerCache(id){try{const c=JSON.parse(localStorage.getItem('kh_player_cache')||'{}');return c[id]!==undefined?c[id]:null;}catch(e){return null;}}
 const TOOL_ICONS={pen:'✏️',triangle:'△',rect:'▭',circle:'○',arrow:'→'};
 let _drawMode=false, _drawColor="#f85149", _drawStrokes=[], _drawing=false, _currentStroke=null, _drawCanvas=null, _drawCtx=null, _drawTool="pen", _shapeStart=null;
 
@@ -3242,7 +3244,16 @@ function _vid(){return document.getElementById("gifVideo");}
 function openGif(id){
   _cleanupGif();
   _gifCurrentId=id;
-  _gifVersionIdx=-1;
+  // Determine which version to open: cached > latest version > original
+  const versions=state[id]?.versions||[];
+  const cachedIdx=_getPlayerCache(id);
+  if(cachedIdx!==null&&cachedIdx>=-1&&cachedIdx<versions.length){
+    _gifVersionIdx=cachedIdx;
+  } else if(versions.length>0){
+    _gifVersionIdx=versions.length-1;
+  } else {
+    _gifVersionIdx=-1;
+  }
   _drawMode=false;
   document.getElementById("drawToggle").classList.remove("active");
   const vid=_vid();
@@ -3285,7 +3296,12 @@ function openGif(id){
     _gifUpdater=requestAnimationFrame(_tickUpdate);
   }
 
-  vid.src=CDN_BASE+"/video/"+id+"_prev.mp4";
+  if(_gifVersionIdx>=0&&versions[_gifVersionIdx]?.url){
+    vid.src=versions[_gifVersionIdx].url;
+  } else {
+    vid.src=CDN_BASE+"/video/"+id+"_prev.mp4";
+    _gifVersionIdx=-1;
+  }
   vid.load();
   _gifPaused=true;
   document.getElementById("gifPlayBtn").textContent="❚❚";
@@ -5530,6 +5546,7 @@ function switchVersion(idx){
   if(_gifVersionIdx<0)_compileNotesToDesc(); else saveState(state);
   const vid=_vid();
   _gifVersionIdx=idx;
+  _setPlayerCache(_gifCurrentId,idx);
   if(idx<0){
     vid.src=CDN_BASE+"/video/"+_gifCurrentId+"_prev.mp4";
   } else {
