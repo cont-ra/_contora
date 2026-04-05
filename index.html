@@ -3221,24 +3221,38 @@ function _renderShotFiles(id){
       }
       e.dataTransfer.effectAllowed="move";
       // Hide native drag image
-      const blank=document.createElement("canvas");blank.width=1;blank.height=1;
+      const blank=document.createElement("img");
+      blank.src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+      document.body.appendChild(blank);
       e.dataTransfer.setDragImage(blank,0,0);
-      // Clone row as ghost
+      setTimeout(()=>blank.remove(),0);
+      // Clone row(s) as ghost
       _dragGhost=document.createElement("div");
       _dragGhost.className="f-drag-ghost";
+      const table=document.createElement("table");table.className="files-table";
+      table.style.cssText="margin:0;width:auto;min-width:200px";
       if(isMulti){
-        _dragGhost.style.padding="8px 16px";
-        _dragGhost.style.fontSize="13px";
-        _dragGhost.style.color="#c9d1d9";
-        _dragGhost.textContent=_fileSelection.size+" items";
+        const rows=body.querySelectorAll("tr.f-selected");
+        let count=0;
+        rows.forEach(r=>{
+          if(count>=4)return;// max 4 rows in ghost
+          const clone=r.cloneNode(true);
+          clone.querySelectorAll(".f-grip,.f-dl,.f-actions button,.f-actions a").forEach(el=>el.remove());
+          clone.classList.remove("f-selected","f-dragging");
+          table.appendChild(clone);
+          count++;
+        });
+        if(_fileSelection.size>4){
+          const extra=document.createElement("tr");
+          extra.innerHTML=`<td colspan="5" style="color:#8b949e;font-size:11px;padding:4px 10px">+${_fileSelection.size-4} more</td>`;
+          table.appendChild(extra);
+        }
       } else {
         const clone=row.cloneNode(true);
-        const table=document.createElement("table");table.className="files-table";
-        table.style.cssText="margin:0;width:auto;min-width:200px";
+        clone.querySelectorAll(".f-grip,.f-dl,.f-actions button,.f-actions a").forEach(el=>el.remove());
         table.appendChild(clone);
-        clone.querySelectorAll(".f-grip,.f-dl,.f-actions button").forEach(el=>el.remove());
-        _dragGhost.appendChild(table);
       }
+      _dragGhost.appendChild(table);
       _dragGhost.style.transform=`translate(${e.clientX+14}px,${e.clientY-14}px)`;
       document.body.appendChild(_dragGhost);
       row.classList.add("f-dragging");
