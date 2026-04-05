@@ -786,7 +786,7 @@
   <button class="filter-btn" data-filter="skip">Skip</button>
   <span class="separator">|</span>
   <span id="artistFilterBtns" style="display:inline-flex;gap:10px"><button class="artist-filter-btn active" data-artist="all">All Artists</button><button class="artist-filter-btn" data-artist="unassigned">Unassigned</button></span>
-  <button class="export-btn" id="editModeBtn" onclick="toggleEditMode()">Edit Shots</button>
+  <button class="export-btn" id="editModeBtn" onclick="toggleEditMode()" style="display:none">Edit Shots</button>
   <button class="export-btn" id="addShotBtn" style="display:none;background:#238636;color:#fff" onclick="openAddShotDialog()">+ Add Shot</button>
 </div>
 
@@ -1261,11 +1261,12 @@ function toggleEditMode(){
   render();
 }
 function _loadEditMode(){
+  if(!isAdmin()){_editMode=false;return;}
   try{_editMode=localStorage.getItem("em_"+(currentUser?currentUser.id:"guest"))==="1";}catch(e){}
   const btn=document.getElementById("editModeBtn");
-  if(btn){btn.classList.toggle("edit-active",_editMode);btn.textContent=_editMode?"Editing...":"Edit Shots";}
+  if(btn){btn.style.display='inline-block';btn.classList.toggle("edit-active",_editMode);btn.textContent=_editMode?"Editing...":"Edit Shots";}
   const addBtn=document.getElementById("addShotBtn");
-  if(addBtn)addBtn.style.display=(_editMode&&isAdmin())?'inline-block':'none';
+  if(addBtn)addBtn.style.display=_editMode?'inline-block':'none';
 }
 function isEditMode(){return _editMode;}
 
