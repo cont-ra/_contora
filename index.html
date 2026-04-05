@@ -2746,6 +2746,7 @@ function renderChat(){
       html+=`<div class="chat-msg-inner">`;
       html+=`<input type="checkbox" class="chat-msg-checkbox" ${_pnSel?'checked':''} onclick="event.stopPropagation();chatToggleSelect('${pnKey}',this.closest('.chat-msg'))">`;
       html+=`<div class="chat-msg-content">`;
+      if(!isGuest()) html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="event.stopPropagation();chatEnterSelectMode('${pnKey}')" title="Select">☐</div></div>`;
       html+=`<div class="chat-msg-header">${esc(m.author||'')}<span style="opacity:0.4;margin-left:6px">${esc(m._version)}</span>${tc?` &nbsp;<span ${tcClick}>${esc(tc)}</span>`:''}</div>`;
       html+=`<div class="chat-msg-body" style="color:#8b949e">${drawHtml}${esc(m.text||'(drawing)')}</div>`;
       html+=`</div></div></div>`;
