@@ -3187,18 +3187,30 @@ function _collectFileUrlsWithPath(items,prefix){
 async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
   const zip=new JSZip();
-  let done=0;
-  // show progress
+  let done=0,ok=0;
   const n=document.getElementById("saveNotice");
   n.textContent=`Downloading 0/${files.length}...`;n.classList.add("show");
+  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
   for(const f of files){
     try{
-      const resp=await fetch(f.url);
-      const blob=await resp.blob();
-      zip.file(f.path,blob);
-    }catch(e){console.warn('Failed to fetch',f.url,e);}
+      // Proxy through Worker for CORS
+      const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
+      const resp=await fetch(proxyUrl);
+      if(resp.ok){zip.file(f.path,await resp.blob());ok++;}
+    }catch(e){}
     done++;
     n.textContent=`Downloading ${done}/${files.length}...`;
+  }
+  if(ok===0){
+    // CORS blocked — fallback to direct links
+    n.classList.remove("show");
+    for(const f of files){
+      const a=document.createElement('a');
+      a.href=f.url;a.download=f.name;a.target='_blank';a.rel='noopener';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      await new Promise(r=>setTimeout(r,300));
+    }
+    return;
   }
   n.textContent='Packing ZIP...';
   const content=await zip.generateAsync({type:'blob'});
