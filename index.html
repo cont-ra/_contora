@@ -1313,7 +1313,7 @@ async function deleteShot(id){
   if(state.__files&&state.__files[id])delete state.__files[id];
   if(state.__chat&&state.__chat[id])delete state.__chat[id];
   saveState(state);
-  try{await r2Delete('video/'+id+'.mp4');}catch(e){}
+  try{await r2Delete('video/'+id+'_prev.mp4');}catch(e){}
   try{await r2Delete('thumbs/'+id+'.jpg');}catch(e){}
   const tbody=document.getElementById("tbody");if(tbody)tbody.dataset.ids="";
   render();updateStats();
@@ -3158,7 +3158,7 @@ function thumbPreviewStart(wrap,id){
   const playIcon=wrap.querySelector('.gif-play-icon');
   const vid=document.createElement('video');
   vid.className='gif-thumb';
-  vid.src=CDN_BASE+'/video/'+id+'.mp4';
+  vid.src=CDN_BASE+'/video/'+id+'_prev.mp4';
   vid.muted=true;vid.loop=true;vid.playsInline=true;vid.preload='auto';
   vid.style.position='absolute';vid.style.top='0';vid.style.left='0';vid.style.width='100%';vid.style.height='100%';vid.style.objectFit='cover';vid.style.borderRadius='4px';
   vid.style.opacity='0';vid.style.transition='opacity 0.3s';
@@ -3230,7 +3230,7 @@ function openGif(id){
     _gifUpdater=requestAnimationFrame(_tickUpdate);
   }
 
-  vid.src=CDN_BASE+"/video/"+id+".mp4";
+  vid.src=CDN_BASE+"/video/"+id+"_prev.mp4";
   vid.load();
   _gifPaused=true;
   document.getElementById("gifPlayBtn").textContent="❚❚";
@@ -3895,7 +3895,7 @@ async function updateOriginal(shotId,input){
   input.value="";
   const ok=await _showConfirm("Update original?","Replace original video for "+shotId+".<br>All notes, drawings and comments will be preserved.");
   if(!ok)return;
-  const videoKey="video/"+shotId+".mp4";
+  const videoKey="video/"+shotId+"_prev.mp4";
   const thumbKey="thumbs/"+shotId+".jpg";
   _uploads[shotId]={name:"Updating original...",pct:0,done:false,error:false};
   if(_shotCurrentId===shotId)_renderShotBody(shotId);
@@ -4015,7 +4015,7 @@ function _getFilesRoot(id){
   }
   const hasSrc=hasGif(id);
   // source: original (raw footage) + preview (source preview video)
-  const srcUrl=CDN_BASE+"/video/"+id+".mp4";
+  const srcUrl=CDN_BASE+"/video/"+id+"_prev.mp4";
   const srcBytes=_sizeCache[srcUrl]>0?_sizeCache[srcUrl]:0;
   const sourcePreview=hasSrc?[{name:id+".mp4",size:srcBytes?_formatSize(srcBytes):'…',_bytes:srcBytes,date:"—",url:srcUrl}]:[];
   if(hasSrc&&!_sizeCache[srcUrl])_fetchSize(srcUrl,()=>{if(_shotCurrentId===id&&_shotTab==='files')_renderShotFiles(id);});
@@ -5337,7 +5337,7 @@ function switchVersion(idx){
   const vid=_vid();
   _gifVersionIdx=idx;
   if(idx<0){
-    vid.src=CDN_BASE+"/video/"+_gifCurrentId+".mp4";
+    vid.src=CDN_BASE+"/video/"+_gifCurrentId+"_prev.mp4";
   } else {
     const v=(state[_gifCurrentId]?.versions||[])[idx];
     if(!v)return;
