@@ -3955,6 +3955,21 @@ function _renderShotFiles(id){
       document.body.appendChild(blank);
       e.dataTransfer.setDragImage(blank,0,0);
       setTimeout(()=>blank.remove(),0);
+      // In chat mode: reuse cf-tip as drag ghost
+      if(_chatFileMode){
+        _cfDragging=true;
+        const tipRow=row.closest('tr[data-tip]');
+        if(_cfTipEl){
+          // Smoothly transition existing tip to drag mode
+          _cfTipEl.style.transition='border-color 0.3s, box-shadow 0.3s, left 0.15s, top 0.15s';
+          _cfTipEl.classList.add('drag-active');
+          _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
+        } else if(tipRow){
+          _showCfTipForRow(tipRow,true);
+          if(_cfTipEl){_cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';}
+        }
+        _dragGhost=null;
+      } else {
       // Clone row(s) as ghost
       _dragGhost=document.createElement("div");
       _dragGhost.className="f-drag-ghost";
@@ -3964,7 +3979,7 @@ function _renderShotFiles(id){
         const rows=body.querySelectorAll("tr.f-selected");
         let count=0;
         rows.forEach(r=>{
-          if(count>=4)return;// max 4 rows in ghost
+          if(count>=4)return;
           const clone=r.cloneNode(true);
           clone.querySelectorAll(".f-grip,.f-dl,.f-actions button,.f-actions a").forEach(el=>el.remove());
           clone.classList.remove("f-selected","f-dragging");
@@ -3984,17 +3999,22 @@ function _renderShotFiles(id){
       _dragGhost.appendChild(table);
       _dragGhost.style.transform=`translate(${e.clientX+14}px,${e.clientY-14}px)`;
       document.body.appendChild(_dragGhost);
+      }
       row.classList.add("f-dragging");
       if(isMulti) body.querySelectorAll("tr.f-selected").forEach(r=>r.classList.add("f-dragging"));
     });
     grip.addEventListener("drag",e=>{
-      if(_dragGhost&&e.clientX>0){
+      if(e.clientX<=0)return;
+      if(_chatFileMode&&_cfTipEl){
+        _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
+      } else if(_dragGhost){
         _dragGhost.style.transform=`translate(${e.clientX+14}px,${e.clientY-14}px)`;
       }
     });
     grip.addEventListener("dragend",()=>{
       body.querySelectorAll("tr.f-dragging").forEach(r=>r.classList.remove("f-dragging"));
-      if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
+      if(_chatFileMode){_removeCfTip();}
+      else if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
     });
   }
   body.querySelectorAll(".f-grip[data-drag-file]").forEach(g=>_setupGripDrag(g,'dragFile'));
@@ -4124,47 +4144,29 @@ function _renderShotFiles(id){
 }
 let _cfTipEl=null;
 function _setupChatFileTips(container){
-  let _cfDragging=false;
   container.querySelectorAll('tr[data-tip]').forEach(row=>{
-    row.addEventListener('mouseenter',e=>{
+    row.addEventListener('mouseenter',()=>{
       if(_cfDragging)return;
-      _removeCfTip();
-      _showCfTip(row,false);
+      _showCfTipForRow(row,false);
     });
     row.addEventListener('mouseleave',()=>{if(!_cfDragging)_removeCfTip();});
-    // Grip drag → transition tooltip to drag mode
-    const grip=row.querySelector('.f-grip');
-    if(grip){
-      grip.addEventListener('dragstart',()=>{
-        _cfDragging=true;
-        if(_cfTipEl){
-          // Animate to drag style
-          _cfTipEl.classList.add('drag-active');
-        } else {
-          _showCfTip(row,true);
-        }
-      });
-      grip.addEventListener('dragend',()=>{
-        _cfDragging=false;
-        _removeCfTip();
-      });
-    }
   });
-  function _showCfTip(row,isDrag){
-    _removeCfTip();
-    const name=row.dataset.tip,size=row.dataset.tipSize,edit=row.dataset.tipEdit,date=row.dataset.tipDate,icon=row.dataset.tipIcon;
-    const tip=document.createElement('div');tip.className='cf-tip'+(isDrag?' drag-active':'');
-    tip.innerHTML=`<span class="cft-icon">${icon}</span><span class="cft-name">${esc(name)}</span>${size?'<span class="cft-size">'+size+'</span>':''}${edit?'<span class="cft-edit">'+edit+'</span>':''}${date?'<span class="cft-date">'+date+'</span>':''}`;
-    document.body.appendChild(tip);
-    const rr=row.getBoundingClientRect();
-    tip.style.left=rr.left+'px';tip.style.top=(rr.bottom+4)+'px';
-    const tr=tip.getBoundingClientRect();
-    if(tr.right>window.innerWidth)tip.style.left=Math.max(0,window.innerWidth-tr.width-8)+'px';
-    if(tr.bottom>window.innerHeight)tip.style.top=(rr.top-tr.height-4)+'px';
-    _cfTipEl=tip;
-  }
 }
-function _removeCfTip(){if(_cfTipEl){_cfTipEl.remove();_cfTipEl=null;}}
+let _cfDragging=false;
+function _showCfTipForRow(row,isDrag){
+  _removeCfTip();
+  const name=row.dataset.tip,size=row.dataset.tipSize,edit=row.dataset.tipEdit,date=row.dataset.tipDate,icon=row.dataset.tipIcon;
+  const tip=document.createElement('div');tip.className='cf-tip'+(isDrag?' drag-active':'');
+  tip.innerHTML=`<span class="cft-icon">${icon}</span><span class="cft-name">${esc(name)}</span>${size?'<span class="cft-size">'+size+'</span>':''}${edit?'<span class="cft-edit">'+edit+'</span>':''}${date?'<span class="cft-date">'+date+'</span>':''}`;
+  document.body.appendChild(tip);
+  const rr=row.getBoundingClientRect();
+  tip.style.left=rr.left+'px';tip.style.top=(rr.bottom+4)+'px';
+  const tr=tip.getBoundingClientRect();
+  if(tr.right>window.innerWidth)tip.style.left=Math.max(0,window.innerWidth-tr.width-8)+'px';
+  if(tr.bottom>window.innerHeight)tip.style.top=(rr.top-tr.height-4)+'px';
+  _cfTipEl=tip;
+}
+function _removeCfTip(){if(_cfTipEl){_cfTipEl.remove();_cfTipEl=null;}_cfDragging=false;}
 function _showNewFolderInput(id){
   const row=document.getElementById("newFolderRow");
   if(row){row.style.display="flex";document.getElementById("newFolderName").focus();}
