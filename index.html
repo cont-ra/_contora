@@ -2380,7 +2380,22 @@ function _renderFileCard(path){
     size=entry.size||'';
   }
   const meta=[count,size].filter(Boolean).join(' • ');
-  return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${entry?.url?`<a class="cfc-btn" href="${entry.url}" target="_blank" onclick="event.stopPropagation()" title="Download">⬇</a>`:''}</div></div>`;
+  let dlBtn='';
+  if(entry?.type==='folder'){
+    dlBtn=`<button class="cfc-btn" onclick="event.stopPropagation();_downloadCardFolder('${esc(path)}')" title="Download as ZIP">⬇</button>`;
+  } else if(entry?.url){
+    dlBtn=`<a class="cfc-btn" href="${entry.url}" target="_blank" onclick="event.stopPropagation()" title="Download">⬇</a>`;
+  }
+  return `<div class="chat-file-card" onclick="_navigateChatFile('${esc(path)}')"><span class="cfc-icon">${icon}</span><div class="cfc-info"><div class="cfc-name">${esc(name)}</div>${meta?`<div class="cfc-meta">${meta}</div>`:''}</div><div class="cfc-actions"><button class="cfc-btn" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>${dlBtn}</div></div>`;
+}
+function _downloadCardFolder(path){
+  const id=noteTaskId;if(!id)return;
+  const parts=path.replace(/\/$/,'').split('/');
+  let items=_getFilesRoot(id);
+  for(let i=0;i<parts.length-1;i++){const f=items.find(x=>x.name===parts[i]&&x.type==='folder');if(f)items=f.children||[];else return;}
+  const folder=items.find(x=>x.name===parts[parts.length-1]&&x.type==='folder');
+  if(!folder||!folder.children)return;
+  _downloadAsZip(_collectFileUrlsWithPath(folder.children,''),id+'_'+parts[parts.length-1]);
 }
 // Document-level capture handlers for chat file drop
 // Use element ID matching instead of contains() — target may be detached after re-render
