@@ -2705,6 +2705,8 @@ function _isOnTextarea(el){
 }
 document.addEventListener('dragover',e=>{
   if(noteType!=='chat')return;
+  // Don't intercept dragover on file manager folders
+  if(e.target.closest&&e.target.closest('tr[data-drop-folder]'))return;
   // Accept drop anywhere in note overlay when chat is open
   const ov=document.getElementById("noteOverlay");
   if(!ov||ov.classList.contains("hidden"))return;
@@ -2723,6 +2725,8 @@ document.addEventListener('dragleave',e=>{
 },true);
 document.addEventListener('drop',e=>{
   if(noteType!=='chat')return;
+  // Don't intercept drops on file manager folders
+  if(e.target.closest&&e.target.closest('tr[data-drop-folder]'))return;
   const file=e.dataTransfer.getData("text/x-file-move");
   const folder=e.dataTransfer.getData("text/x-folder-move");
   const multi=e.dataTransfer.getData("text/x-multi-move");
