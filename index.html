@@ -5188,8 +5188,6 @@ async function _downloadAsZip(files,zipName){
   if(!files.length){await _showAlert('Empty','No files to download');return;}
   let done=0,ok=0;
   const panel=_showOperationProgress('Downloading & zipping',files.length);
-  const fileStream=streamSaver.createWriteStream(zipName+'.zip');
-  const writer=fileStream.getWriter();
   const zip=new JSZip();
   const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
   for(const f of files){
