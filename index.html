@@ -443,7 +443,7 @@
   .chat-files-body .files-table td:nth-child(2) { display: none; }
   .chat-files-body .files-drop { padding: 16px; font-size: 11px; min-height: 40px; }
   .chat-files-body .f-grip { font-size: 14px; width: 18px; padding-right: 4px; }
-  .cf-tip { position: fixed; z-index: 9999; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c9d1d9; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 90vw; transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s; }
+  .cf-tip { position: fixed; z-index: 9999; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c9d1d9; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 90vw; transition: border-color 0.3s, box-shadow 0.3s; }
   .cf-tip.drag-active { border-color: #58a6ff; box-shadow: 0 4px 16px rgba(88,166,255,0.3); }
   .cf-tip .cft-icon { flex-shrink: 0; }
   .cf-tip .cft-name { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
@@ -3960,8 +3960,7 @@ function _renderShotFiles(id){
         _cfDragging=true;
         const tipRow=row.closest('tr[data-tip]');
         if(_cfTipEl){
-          // Smoothly transition existing tip to drag mode
-          _cfTipEl.style.transition='border-color 0.3s, box-shadow 0.3s, left 0.15s, top 0.15s';
+          // Smoothly transition existing tip to drag mode (color only, position instant)
           _cfTipEl.classList.add('drag-active');
           _cfTipEl.style.left=(e.clientX+14)+'px';_cfTipEl.style.top=(e.clientY-14)+'px';
         } else if(tipRow){
