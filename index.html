@@ -2737,11 +2737,18 @@ function renderChat(){
   if(!all.length) html+='<div class="chat-empty">No messages yet</div>';
   else all.forEach(m=>{
     if(m._isPlayerNote){
+      const pnKey="pn_"+m.id+"_"+m._versionIdx;
+      const _pnSel=_chatSelected.has(pnKey);
       const tc=m.tc||'';
       const drawHtml=m.drawing?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${m.drawing.color};margin-right:4px"></span>`:'';
-      const tcClick=tc&&m.frame!=null?`onclick="jumpToPlayerNote('${noteTaskId}',${m._versionIdx},${m.frame})" style="color:#58a6ff;font-size:11px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted"`:`style="color:#58a6ff;font-size:11px"`;
-      html+=`<div class="chat-msg from-note"><div class="chat-msg-header">${esc(m.author||'')}<span style="opacity:0.4;margin-left:6px">${esc(m._version)}</span>${tc?` &nbsp;<span ${tcClick}>${esc(tc)}</span>`:''}</div>`;
-      html+=`<div class="chat-msg-body" style="color:#8b949e">${drawHtml}${esc(m.text||'(drawing)')}</div></div>`;
+      const tcClick=tc&&m.frame!=null?`onclick="event.stopPropagation();jumpToPlayerNote('${noteTaskId}',${m._versionIdx},${m.frame})" style="color:#58a6ff;font-size:11px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted"`:`style="color:#58a6ff;font-size:11px"`;
+      html+=`<div class="chat-msg from-note${_pnSel?' selected':''}" data-mid="${pnKey}" onclick="_chatSelectMode?chatToggleSelect('${pnKey}',this):void(0)">`;
+      html+=`<div class="chat-msg-inner">`;
+      html+=`<input type="checkbox" class="chat-msg-checkbox" ${_pnSel?'checked':''} onclick="event.stopPropagation();chatToggleSelect('${pnKey}',this.closest('.chat-msg'))">`;
+      html+=`<div class="chat-msg-content">`;
+      html+=`<div class="chat-msg-header">${esc(m.author||'')}<span style="opacity:0.4;margin-left:6px">${esc(m._version)}</span>${tc?` &nbsp;<span ${tcClick}>${esc(tc)}</span>`:''}</div>`;
+      html+=`<div class="chat-msg-body" style="color:#8b949e">${drawHtml}${esc(m.text||'(drawing)')}</div>`;
+      html+=`</div></div></div>`;
       return;
     }
     const isAdm=m.author==="admin",isCli=m.author==="client",cls=isAdm?"from-admin":isCli?"from-client":"from-artist";
@@ -2961,6 +2968,18 @@ function chatDeleteSelected(){
   if(!_chatSelected.size)return;
   const msgs=getChat(noteTaskId);
   _chatSelected.forEach(mid=>{
+    if(typeof mid==="string"&&mid.startsWith("pn_")){
+      // Player note: pn_{id}_{versionIdx}
+      const parts=mid.split("_");const pnId=parseInt(parts[1]);const vIdx=parseInt(parts[2]);
+      if(vIdx===-1){
+        const arr=state[noteTaskId]?.playerNotes;
+        if(arr){const idx=arr.findIndex(n=>n.id===pnId);if(idx>=0)arr.splice(idx,1);}
+      } else {
+        const v=state[noteTaskId]?.versions?.[vIdx];
+        if(v?.notes){const idx=v.notes.findIndex(n=>n.id===pnId);if(idx>=0)v.notes.splice(idx,1);}
+      }
+      return;
+    }
     const m=msgs.find(x=>x.id===mid);
     if(!m)return;
     if(m.deleted&&isAdmin()){
