@@ -454,6 +454,9 @@
   .cf-tip.drag-active .cft-size,
   .cf-tip.drag-active .cft-edit,
   .cf-tip.drag-active .cft-date { max-width: 0; opacity: 0; padding: 0; margin: 0; }
+  .chat-file-link { color: #58a6ff; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; padding: 1px 4px; border-radius: 3px; }
+  .chat-file-link:hover { background: rgba(88,166,255,0.1); }
+  .chat-drop-active { border-color: #58a6ff !important; background: rgba(88,166,255,0.05) !important; }
   .chat-files-panel:not([style*="display: none"]) + .note-panel { border-radius: 0 12px 12px 0; }
   .note-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px; border-bottom: 1px solid #21262d; flex-shrink: 0; }
   .note-panel-title { display: flex; align-items: center; gap: 10px; }
@@ -2180,11 +2183,39 @@ function openNote(taskId,type){
   }
 }
 
+function _renderFileLinks(html){
+  // Replace [[file:path/to/file.txt]] with clickable link
+  return html.replace(/\[\[file:([^\]]+)\]\]/g,(m,path)=>{
+    const name=path.includes('/')?path.split('/').pop():path;
+    const icon=path.endsWith('/')||!name.includes('.')?'📁':'📄';
+    return `<span class="chat-file-link" onclick="_navigateChatFile('${esc(path)}')" title="${esc(path)}">${icon} ${esc(name)}</span>`;
+  });
+}
+function _navigateChatFile(path){
+  if(!noteTaskId||noteType!=='chat')return;
+  const parts=path.split('/');
+  const fileName=parts.pop();
+  // Navigate to folder
+  _filesPath=[];
+  for(const p of parts)_filesPath.push(p);
+  _renderShotFiles(noteTaskId);
+  // Highlight file after render
+  setTimeout(()=>{
+    const body=document.getElementById("chatFilesBody");
+    if(!body)return;
+    _clearSelection();
+    _fileSelection.add(fileName);
+    _updateSelectionUI(noteTaskId);
+    // Scroll to selected row
+    const row=body.querySelector(`tr[data-sel-name="${CSS.escape(fileName)}"]`);
+    if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
+  },50);
+}
 function renderMsgContent(text, mid) {
   // Check if message contains todo items: lines starting with - [ ] or - [x]
   const lines = text.split('\n');
   const hasTodo = lines.some(l => /^\s*-\s*\[([ xX])\]/.test(l));
-  if (!hasTodo) return `<div>${esc(text)}</div>`;
+  if (!hasTodo) return _renderFileLinks(`<div>${esc(text)}</div>`);
 
   let html = '<ul class="chat-todo">';
   let lineIdx = 0;
@@ -2204,7 +2235,7 @@ function renderMsgContent(text, mid) {
     lineIdx++;
   }
   html += '</ul>';
-  return html;
+  return _renderFileLinks(html);
 }
 
 function toggleTodo(mid, lineIdx) {
@@ -2319,6 +2350,33 @@ function renderChat(){
   // Bind Enter key
   const ta=document.getElementById("chatTA");
   if(ta){
+    // Accept file/folder drops from chat files panel
+    ta.addEventListener("dragover",e=>{
+      if(e.dataTransfer.types.includes("text/x-file-move")||e.dataTransfer.types.includes("text/x-folder-move")||e.dataTransfer.types.includes("text/x-multi-move")){
+        e.preventDefault();e.dataTransfer.dropEffect="link";
+        ta.classList.add("chat-drop-active");
+      }
+    });
+    ta.addEventListener("dragleave",()=>ta.classList.remove("chat-drop-active"));
+    ta.addEventListener("drop",e=>{
+      ta.classList.remove("chat-drop-active");
+      const file=e.dataTransfer.getData("text/x-file-move");
+      const folder=e.dataTransfer.getData("text/x-folder-move");
+      const multi=e.dataTransfer.getData("text/x-multi-move");
+      let links=[];
+      if(multi){try{links=JSON.parse(multi);}catch(ex){}}
+      else if(file)links=[file];
+      else if(folder)links=[folder+'/'];
+      if(links.length){
+        e.preventDefault();
+        const path=_filesPath.length?_filesPath.join('/')+'/':'';
+        const insert=links.map(n=>`[[file:${path}${n}]]`).join(' ');
+        const pos=ta.selectionStart;
+        ta.value=ta.value.slice(0,pos)+insert+ta.value.slice(pos);
+        ta.focus();ta.selectionStart=ta.selectionEnd=pos+insert.length;
+        ta.dispatchEvent(new Event("input"));
+      }
+    });
     ta.addEventListener("keydown",e=>{
       if(todoMode){
         if(e.key==="Enter"&&e.shiftKey){
