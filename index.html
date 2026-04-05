@@ -458,6 +458,7 @@
   .export-btn { background: #238636; border: 1px solid #2ea043; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-left: auto; }
   .export-btn:hover { background: #2ea043; }
 </style>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ffmpeg/ffmpeg.js"></script>
 </head>
 <body>
@@ -3175,28 +3176,50 @@ function _collectFileUrls(items){
   }
   return urls;
 }
+function _collectFileUrlsWithPath(items,prefix){
+  let out=[];
+  for(const f of items){
+    if(f.type==='folder'&&f.children) out=out.concat(_collectFileUrlsWithPath(f.children,prefix+f.name+'/'));
+    else if(f.url) out.push({name:f.name,path:prefix+f.name,url:f.url});
+  }
+  return out;
+}
+async function _downloadAsZip(files,zipName){
+  if(!files.length){await _showAlert('Empty','No files to download');return;}
+  const zip=new JSZip();
+  let done=0;
+  // show progress
+  const n=document.getElementById("saveNotice");
+  n.textContent=`Downloading 0/${files.length}...`;n.classList.add("show");
+  for(const f of files){
+    try{
+      const resp=await fetch(f.url);
+      const blob=await resp.blob();
+      zip.file(f.path,blob);
+    }catch(e){console.warn('Failed to fetch',f.url,e);}
+    done++;
+    n.textContent=`Downloading ${done}/${files.length}...`;
+  }
+  n.textContent='Packing ZIP...';
+  const content=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(content);
+  a.download=zipName+'.zip';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  n.textContent='Done';setTimeout(()=>n.classList.remove("show"),1500);
+}
 function _downloadFolderByName(id,name){
   const {items}=_resolveFilesPath(id);
   const folder=items.find(f=>f.name===name&&f.type==='folder');
-  if(!folder||!folder.children){alert('Folder is empty');return;}
-  const files=_collectFileUrls(folder.children);
-  if(!files.length){alert('Folder is empty');return;}
-  for(const f of files){
-    const a=document.createElement('a');
-    a.href=f.url;a.download=f.name;a.target='_blank';
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }
+  if(!folder||!folder.children)return;
+  const files=_collectFileUrlsWithPath(folder.children,'');
+  _downloadAsZip(files,id+'_'+name);
 }
 function _downloadAllFiles(id){
   const root=_getFilesRoot(id);
-  const files=_collectFileUrls(root);
-  if(!files.length){alert('No files to download');return;}
-  // download each file via hidden <a>
-  for(const f of files){
-    const a=document.createElement('a');
-    a.href=f.url;a.download=f.name;a.target='_blank';
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }
+  const files=_collectFileUrlsWithPath(root,'');
+  _downloadAsZip(files,id+'_files');
 }
 function _fileIcon(name){
   const ext=(name.split('.').pop()||'').toLowerCase();
