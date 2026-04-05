@@ -2349,9 +2349,9 @@ function _chatPanelDrop(e){
 function _sendChatFileCard(text){
   if(!noteTaskId)return;
   if(!state[noteTaskId])state[noteTaskId]={};
-  if(!state[noteTaskId].chat)state[noteTaskId].chat=[];
+  if(!state[noteTaskId].artistNotes)state[noteTaskId].artistNotes=[];
   const role=isAdmin()?'admin':isClient()?'client':'artist';
-  state[noteTaskId].chat.push({id:Date.now(),author:role,text,ts:Date.now()});
+  state[noteTaskId].artistNotes.push({id:Date.now(),author:role,text,ts:Date.now()});
   saveState(state);renderChat();
 }
 function _renderFileCard(path){
