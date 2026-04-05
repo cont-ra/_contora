@@ -2746,7 +2746,7 @@ function renderChat(){
       html+=`<div class="chat-msg-inner">`;
       html+=`<input type="checkbox" class="chat-msg-checkbox" ${_pnSel?'checked':''} onclick="event.stopPropagation();chatToggleSelect('${pnKey}',this.closest('.chat-msg'))">`;
       html+=`<div class="chat-msg-content">`;
-      if(!isGuest()) html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="event.stopPropagation();chatEnterSelectMode('${pnKey}')" title="Select">☐</div></div>`;
+      if(isAdmin()) html+=`<div class="chat-msg-actions"><div class="chat-action-btn" onclick="event.stopPropagation();chatEnterSelectMode('${pnKey}')" title="Select">☐</div></div>`;
       html+=`<div class="chat-msg-header">${esc(m.author||'')}<span style="opacity:0.4;margin-left:6px">${esc(m._version)}</span>${tc?` &nbsp;<span ${tcClick}>${esc(tc)}</span>`:''}</div>`;
       html+=`<div class="chat-msg-body" style="color:#8b949e">${drawHtml}${esc(m.text||'(drawing)')}</div>`;
       html+=`</div></div></div>`;
@@ -2965,31 +2965,55 @@ function chatToggleSelect(mid,el){
   if(_chatSelected.size===0) chatExitSelectMode();
 }
 
+function _canDeleteSelected(mid){
+  if(typeof mid==="string"&&mid.startsWith("pn_")) return isAdmin();
+  const msgs=getChat(noteTaskId);
+  const m=msgs.find(x=>x.id===mid);
+  if(!m) return false;
+  if(m.deleted) return isAdmin();
+  const isOwn=(isAdmin()&&m.author==="admin")||(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
+  return isAdmin()||isOwn;
+}
+
 function chatDeleteSelected(){
   if(!_chatSelected.size)return;
   const msgs=getChat(noteTaskId);
+  let deleted=0;
   _chatSelected.forEach(mid=>{
+    if(!_canDeleteSelected(mid)) return;
     if(typeof mid==="string"&&mid.startsWith("pn_")){
-      // Player note: pn_{id}_{versionIdx}
       const parts=mid.split("_");const pnId=parseInt(parts[1]);const vIdx=parseInt(parts[2]);
-      if(vIdx===-1){
-        const arr=state[noteTaskId]?.playerNotes;
-        if(arr){const idx=arr.findIndex(n=>n.id===pnId);if(idx>=0)arr.splice(idx,1);}
-      } else {
-        const v=state[noteTaskId]?.versions?.[vIdx];
-        if(v?.notes){const idx=v.notes.findIndex(n=>n.id===pnId);if(idx>=0)v.notes.splice(idx,1);}
+      let arr=null;
+      if(vIdx===-1){ arr=state[noteTaskId]?.playerNotes; }
+      else { const v=state[noteTaskId]?.versions?.[vIdx]; arr=v?.notes; }
+      if(arr){
+        const idx=arr.findIndex(n=>n.id===pnId);
+        if(idx>=0){
+          const note=arr[idx];
+          // Delete associated drawing
+          if(note.drawing&&note.frame!=null){
+            const dStore=vIdx===-1?state[noteTaskId]?.drawings:state[noteTaskId]?.versions?.[vIdx]?.drawings;
+            if(dStore&&dStore[note.frame]){
+              const da=dStore[note.frame];
+              for(let i=da.length-1;i>=0;i--){if(da[i].t===note.drawing.tool&&da[i].c===note.drawing.color){da.splice(i,1);break;}}
+              if(!da.length)delete dStore[note.frame];
+            }
+          }
+          arr.splice(idx,1);deleted++;
+        }
       }
       return;
     }
     const m=msgs.find(x=>x.id===mid);
     if(!m)return;
     if(m.deleted&&isAdmin()){
-      const idx=msgs.indexOf(m);if(idx>=0)msgs.splice(idx,1);
+      const idx=msgs.indexOf(m);if(idx>=0){msgs.splice(idx,1);deleted++;}
     } else {
       const isOwn=(isArtist()&&m.author==="artist")||(isClient()&&m.author==="client");
-      if(isAdmin()||isOwn){m.deletedText=m.text;m.deleted=true;m.text="";}
+      if(isAdmin()||isOwn){m.deletedText=m.text;m.deleted=true;m.text="";deleted++;}
     }
   });
+  if(!deleted)return;
   saveState(state);
   _chatSelectMode=false;_chatSelected.clear();
   renderChat();render();
