@@ -5198,6 +5198,9 @@ async function _downloadAsZip(files,zipName){
   const panel=_showOperationProgress('Downloading & zipping',files.length);
   const fileStream=streamSaver.createWriteStream(zipName+'.zip');
   const writer=fileStream.getWriter();
+  const crc32tab=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;crc32tab[n]=c;}
+  function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crc32tab[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
   const encoder=new TextEncoder();
   const centralDir=[];
   let offset=0;
@@ -5210,16 +5213,17 @@ async function _downloadAsZip(files,zipName){
       if(!resp.ok)throw new Error('fetch failed');
       const buf=new Uint8Array(await resp.arrayBuffer());
       const nameBytes=encoder.encode(f.path);
+      const crc=crc32(buf);
       const localHeader=new Uint8Array([
-        0x50,0x4B,0x03,0x04, 0x0A,0x00, 0x08,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-        ...makeU32(0),...makeU32(buf.length),...makeU32(buf.length),
+        0x50,0x4B,0x03,0x04, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
+        ...makeU32(crc),...makeU32(buf.length),...makeU32(buf.length),
         ...makeU16(nameBytes.length),...makeU16(0),...nameBytes
       ]);
       const localOffset=offset;
       await writeBytes(localHeader);
       const CHUNK=2*1024*1024;
       for(let c=0;c<buf.length;c+=CHUNK){await writeBytes(buf.subarray(c,Math.min(c+CHUNK,buf.length)));}
-      centralDir.push({nameBytes,size:buf.length,offset:localOffset});
+      centralDir.push({nameBytes,crc,size:buf.length,offset:localOffset});
       ok++;
     }catch(e){}
     done++;
@@ -5229,7 +5233,7 @@ async function _downloadAsZip(files,zipName){
   for(const e of centralDir){
     const cdEntry=new Uint8Array([
       0x50,0x4B,0x01,0x02, 0x14,0x00, 0x0A,0x00, 0x00,0x00, 0x00,0x00, 0x00,0x00,0x00,0x00,
-      ...makeU32(0),...makeU32(e.size),...makeU32(e.size),
+      ...makeU32(e.crc),...makeU32(e.size),...makeU32(e.size),
       ...makeU16(e.nameBytes.length),...makeU16(0),...makeU16(0),
       ...makeU16(0),...makeU16(0),...makeU32(0x20),...makeU32(e.offset),...e.nameBytes
     ]);
