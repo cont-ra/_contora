@@ -303,6 +303,17 @@ async function handleTgPing(request, env) {
         }
       }
     } catch (e) {}
+    // Also pull group administrators — these are not always covered by
+    // recent activity in getUpdates.
+    try {
+      const ar = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatAdministrators?chat_id=${encodeURIComponent(TG_CHAT_ID)}`);
+      const aj = await ar.json();
+      if (aj && aj.ok && Array.isArray(aj.result)) {
+        for (const m of aj.result) {
+          if (m && m.user && !m.user.is_bot) _captureUser(m.user);
+        }
+      }
+    } catch (e) {}
   }
   const tgUsers = Object.values(tgUsersMap);
   return _jsonResp({

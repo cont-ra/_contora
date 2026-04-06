@@ -878,7 +878,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0022</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0023</div>
 
 <script>
 const USERS = {
@@ -6433,6 +6433,9 @@ function _getMentionCandidates(){
 // Push prompt: shows what will be sent + optional comment field with
 // @username autocomplete. Returns trimmed comment string or null on cancel.
 function _showPushPrompt(title,subject){
+  // Lazy fetch — if we don't have any cached TG users yet, kick off ping
+  // in the background so the autocomplete has data shortly after open.
+  if(!(state.__bot?.tgUsers?.length)&&typeof _prefetchTgBotInfo==='function'){_prefetchTgBotInfo();}
   return new Promise((resolve)=>{
     const ov=document.createElement("div");
     ov.className="confirm-overlay";
