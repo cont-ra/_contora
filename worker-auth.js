@@ -143,10 +143,15 @@ async function handleTgPush(request, env) {
       u.searchParams.set('thumb', thumbUrl);
       u.searchParams.set('title', titleStr);
       if (descStr) u.searchParams.set('desc', descStr.slice(0, 120));
+      // Cache-buster: forces Telegram to fetch fresh OG meta for each push
+      u.searchParams.set('t', String(Date.now()));
       return u.toString();
     })();
     const safePreview = previewUrl.replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
-    const text = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}\n\n<a href="${safePreview}">▶ Open in player</a>`;
+    // Plain text body, no <a href>. The preview card itself is the clickable
+    // entry point — opens the URL directly without Telegram's "Open link?"
+    // confirmation dialog (the dialog only appears for anchor text ≠ href).
+    const text = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}`;
     const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
@@ -156,8 +161,7 @@ async function handleTgPush(request, env) {
         message_thread_id: threadId,
         text,
         parse_mode: 'HTML',
-        disable_web_page_preview: false,
-        link_preview_options: { is_disabled: false, url: previewUrl, prefer_large_media: true, show_above_text: true },
+        link_preview_options: { is_disabled: false, url: safePreview, prefer_large_media: true, show_above_text: true },
       }),
     });
     const tgData = await tgResp.json().catch(() => ({}));
