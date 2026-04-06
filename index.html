@@ -825,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0010</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0011</div>
 
 <script>
 const USERS = {
@@ -3300,13 +3300,13 @@ async function pushPlayerNotification(){
   if(pushed[key]){alert("Already pushed for this version");return;}
   const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
   const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
-  // Resolve video URL (public R2 CDN URL)
-  let videoUrl;
+  // Resolve preview thumbnail URL (public R2 CDN URL)
+  let thumbUrl;
   if(_gifVersionIdx<0){
-    videoUrl=CDN_BASE+"/video/"+_gifCurrentId+"_prev.mp4";
+    thumbUrl=CDN_BASE+"/thumbs/"+_gifCurrentId+".jpg";
   } else {
     const v=(state[_gifCurrentId]?.versions||[])[_gifVersionIdx];
-    videoUrl=v?.url||'';
+    thumbUrl=v?.thumb||(CDN_BASE+"/thumbs/"+_gifCurrentId+".jpg");
   }
   const subject=`${_gifCurrentId} ${versionNumber}\n${versionLabel}`;
   const comment=await _showPushPrompt("Push video to Telegram",subject);
@@ -3323,7 +3323,7 @@ async function pushPlayerNotification(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,
-        kind:"video",versionNumber,videoUrl,
+        kind:"video",versionNumber,thumbUrl,
         comment,fromUser,link,
         userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
       })
