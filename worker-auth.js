@@ -121,44 +121,50 @@ async function handleTgPush(request, env) {
   const safeLink = String(link || '').replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
   const linkLine = safeLink ? `\n\n<a href="${safeLink}">Open in tracker</a>` : '';
 
-  // ── VIDEO PUSH: send the version's preview thumbnail as a photo with caption ──
+  // ── VIDEO PUSH: send a sendMessage that points to /p — Telegram will pull
+  // OG meta and render a clickable preview card with the version thumbnail.
   if (kind === 'video' && thumbUrl && /^https?:\/\//.test(thumbUrl)) {
     const videoHeader = safeVersion ? `<b>${safeShot}</b> ${safeVersion}` : `<b>${safeShot}</b>`;
-    const photoCaption = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}${linkLine}`;
-    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
+    // Build /p preview URL — Telegram bot will fetch this and use OG tags
+    const titleStr = `${shotId} ${versionNumber || ''}`.trim();
+    const descStr = shotDesc || '';
+    const previewUrl = (() => {
+      // Player param contains shot id; v contains version idx
+      const u = new URL('https://killhouse-vfx.contora.workers.dev/p');
+      u.searchParams.set('player', shotId);
+      // versionNumber has form 'v003' or 'Source'; the client also has the int idx in `link`
+      // Extract v= from the original tracker link if present
+      let vIdx = '-1';
+      try {
+        const m = String(link || '').match(/[?&]v=(-?\d+)/);
+        if (m) vIdx = m[1];
+      } catch (e) {}
+      u.searchParams.set('v', vIdx);
+      u.searchParams.set('thumb', thumbUrl);
+      u.searchParams.set('title', titleStr);
+      if (descStr) u.searchParams.set('desc', descStr.slice(0, 120));
+      return u.toString();
+    })();
+    const safePreview = previewUrl.replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
+    const text = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}\n\n<a href="${safePreview}">▶ Open in player</a>`;
+    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: TG_CHAT_ID,
         message_thread_id: threadId,
-        photo: thumbUrl,
-        caption: photoCaption,
+        text,
         parse_mode: 'HTML',
+        disable_web_page_preview: false,
+        link_preview_options: { is_disabled: false, url: previewUrl, prefer_large_media: true, show_above_text: true },
       }),
     });
     const tgData = await tgResp.json().catch(() => ({}));
     if (tgResp.ok && tgData.ok) {
-      return _jsonResp({ ok: true, mode: 'photo', message_id: tgData.result?.message_id }, 200, origin);
+      return _jsonResp({ ok: true, mode: 'link_preview', message_id: tgData.result?.message_id }, 200, origin);
     }
-    // Fallback: text-only message if Telegram couldn't fetch the photo
-    const fallbackMsg = `🔔 ${videoHeader}\n👤 By: ${safeFrom}${safeComment ? `\n\n📝 ${safeComment}` : ''}${linkLine}`;
-    const fbResp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        message_thread_id: threadId,
-        text: fallbackMsg,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    });
-    const fbData = await fbResp.json().catch(() => ({}));
-    if (!fbResp.ok || !fbData.ok) {
-      return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || fbData.description || tgResp.status }, 502, origin);
-    }
-    return _jsonResp({ ok: true, mode: 'photo_fallback', message_id: fbData.result?.message_id }, 200, origin);
+    return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || tgResp.status }, 502, origin);
   }
 
   // ── DEFAULT (chat / non-video) ──
@@ -187,6 +193,30 @@ async function handleTgPush(request, env) {
   return _jsonResp({ ok: true, message_id: tgData.result?.message_id }, 200, origin);
 }
 
+// ── /p — preview/redirect endpoint for Telegram link previews ──
+// Bots: returns HTML with og:image + og:title pointing to the player.
+// Users: redirects to the GitHub Pages player URL.
+function handlePreview(request) {
+  const url = new URL(request.url);
+  const player = url.searchParams.get('player') || '';
+  const v = url.searchParams.get('v') || '-1';
+  const thumb = url.searchParams.get('thumb') || OG_IMAGE;
+  const title = url.searchParams.get('title') || 'KILLHOUSE VFX';
+  const desc = url.searchParams.get('desc') || '';
+  const targetUrl = SITE_URL + '?player=' + encodeURIComponent(player) + '&v=' + encodeURIComponent(v);
+  const ua = request.headers.get('user-agent') || '';
+  const isBot = /TelegramBot|WhatsApp|Slack|Discord|facebook|Twitter|LinkedInBot|Googlebot|vkShare|Bingbot/i.test(ua);
+  if (isBot) {
+    const safeTitle = _escapeHtml(title);
+    const safeDesc = _escapeHtml(desc);
+    const safeThumb = String(thumb).replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
+    const safeTarget = String(targetUrl).replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta property="og:type" content="video.other"><meta property="og:title" content="${safeTitle}"><meta property="og:description" content="${safeDesc}"><meta property="og:image" content="${safeThumb}"><meta property="og:image:width" content="1280"><meta property="og:image:height" content="720"><meta property="og:url" content="${safeTarget}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${safeThumb}"><meta name="twitter:title" content="${safeTitle}"><title>${safeTitle}</title></head><body></body></html>`;
+    return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' } });
+  }
+  return Response.redirect(targetUrl, 302);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -194,6 +224,11 @@ export default {
     // Telegram push endpoint
     if (url.pathname === '/tg/push') {
       return handleTgPush(request, env);
+    }
+
+    // Telegram link-preview / redirect for player deep links
+    if (url.pathname === '/p') {
+      return handlePreview(request);
     }
 
     // CORS proxy: /r2/* → fetch from R2 CDN with CORS headers
