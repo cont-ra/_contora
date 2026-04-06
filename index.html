@@ -881,7 +881,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0024</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0025</div>
 
 <script>
 const USERS = {
@@ -920,11 +920,10 @@ async function _prefetchTgBotInfo(){
     const d=await r.json();
     if(!d||!d.ok)return;
     if(!state.__bot)state.__bot={};
-    if(Array.isArray(d.tgUsers)&&d.tgUsers.length){
-      const byUsername={};
-      for(const u of (state.__bot.tgUsers||[])){if(u.username)byUsername[u.username.toLowerCase()]=u;}
-      for(const u of d.tgUsers){if(u.username)byUsername[u.username.toLowerCase()]=u;}
-      state.__bot.tgUsers=Object.values(byUsername);
+    if(Array.isArray(d.tgUsers)){
+      // Replace cache entirely — worker is the source of truth and already
+      // filters out users who left/were kicked from the group.
+      state.__bot.tgUsers=d.tgUsers;
     }
     if(d.topicNames){
       if(!state.__bot.topicNames)state.__bot.topicNames={};
@@ -2061,13 +2060,10 @@ async function _refreshBotStatus(){
     const d=await r.json();
     if(!d.ok)throw new Error(d.error||'unknown');
     _botPingData=d;
-    // Cache discovered Telegram users into state for the @-autocomplete
-    if(Array.isArray(d.tgUsers)&&d.tgUsers.length){
+    // Replace cached Telegram users in state — worker filters out left/kicked
+    if(Array.isArray(d.tgUsers)){
       const cfg=_getBotConfig();
-      const byUsername={};
-      for(const u of (cfg.tgUsers||[])){if(u.username)byUsername[u.username.toLowerCase()]=u;}
-      for(const u of d.tgUsers){if(u.username)byUsername[u.username.toLowerCase()]=u;}
-      cfg.tgUsers=Object.values(byUsername);
+      cfg.tgUsers=d.tgUsers;
       saveState(state);
     }
   }catch(e){

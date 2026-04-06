@@ -358,7 +358,27 @@ async function handleTgPing(request, env) {
       }
     } catch (e) {}
   }
-  const tgUsers = Object.values(tgUsersMap);
+  // Filter out users who are no longer in the group (left / kicked).
+  // Telegram remembers them in our cache forever otherwise.
+  const allCaptured = Object.values(tgUsersMap);
+  const tgUsers = [];
+  await Promise.all(allCaptured.map(async (u) => {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(TG_CHAT_ID)}&user_id=${u.id}`);
+      const j = await r.json();
+      if (j && j.ok && j.result && j.result.status) {
+        const st = j.result.status;
+        if (st === 'left' || st === 'kicked') return; // exclude
+        u.status = st;
+        tgUsers.push(u);
+      } else {
+        // Couldn't determine status — keep it just in case
+        tgUsers.push(u);
+      }
+    } catch (e) {
+      tgUsers.push(u);
+    }
+  }));
   return _jsonResp({
     ok: true,
     workerAlive: true,
