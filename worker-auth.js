@@ -353,11 +353,23 @@ async function handleTgPing(request, env) {
   }
   if (hasToken) {
     try {
-      // Use offset=0 so we never advance the queue and the same updates remain
-      // available for the next call.
-      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=0&limit=100`);
+      // Drain the getUpdates queue: walk it batch-by-batch advancing offset
+      // each round so messages beyond the 100-update limit also get
+      // captured. Each round confirms (acks) the previous batch — that's
+      // fine because every captured user is then persisted to Supabase
+      // below, so we never lose them across calls.
+      let lastSeenId = (stateData && stateData.__bot && stateData.__bot.lastUpdateId) || 0;
+      let nextOffset = lastSeenId ? lastSeenId + 1 : 0;
+      let rounds = 0;
+      while (rounds < 6) {
+      const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates?offset=${nextOffset}&limit=100&timeout=0`);
       const j = await r.json();
       if (j && j.ok && Array.isArray(j.result)) {
+        if (!j.result.length) break;
+        for (const u of j.result) {
+          if (u.update_id > lastSeenId) lastSeenId = u.update_id;
+        }
+        nextOffset = lastSeenId + 1;
         for (const u of j.result) {
           // Bot membership change events expose chat info too
           if (u.my_chat_member && u.my_chat_member.chat) _captureChat(u.my_chat_member.chat);
@@ -383,6 +395,16 @@ async function handleTgPing(request, env) {
             if (ent.type === 'text_mention' && ent.user) _captureUser(ent.user);
           }
         }
+        rounds++;
+        // Stop draining when this batch returned less than the limit
+        if (j.result.length < 100) break;
+      } else {
+        break;
+      }
+      } // end while (rounds < 6)
+      // Persist the new offset so the next /tg/ping starts where we stopped
+      if (lastSeenId && stateData && stateData.__bot) {
+        stateData.__bot.lastUpdateId = lastSeenId;
       }
       // Always include the configured push chat as a known one
       try {
@@ -458,6 +480,27 @@ async function handleTgPing(request, env) {
     }));
     tgUsers = filtered;
   }
+  // Persist tgUsers, knownChats and lastUpdateId back to Supabase so the
+  // cache survives across pings even when getUpdates ages out messages.
+  try {
+    if (stateData) {
+      if (!stateData.__bot) stateData.__bot = {};
+      stateData.__bot.tgUsers = tgUsers;
+      stateData.__bot.knownChats = Object.values(tgChatsMap);
+      stateData.__bot.topicNames = stateData.__bot.topicNames || {};
+      for (const k of Object.keys(topicNames)) stateData.__bot.topicNames[k] = topicNames[k];
+      await fetch(SUPA_URL + '/rest/v1/tracker_state?id=eq.main', {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPA_ANON_KEY,
+          Authorization: 'Bearer ' + SUPA_ANON_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ data: stateData, updated_at: new Date().toISOString() }),
+      });
+    }
+  } catch (e) { /* persistence is best-effort */ }
   return _jsonResp({
     ok: true,
     workerAlive: true,
