@@ -310,6 +310,8 @@ async function handleTgPing(request, env) {
     } catch (e) {}
   }
   // Pull shared state once and reuse it for thread / client-chat lookups
+  // and to resurrect previously-cached TG users that may have aged out of
+  // the getUpdates queue.
   let stateData = null;
   try { stateData = await _fetchState(); } catch (e) {}
   // Pull effective threads (state override merged on top of hardcoded)
@@ -412,6 +414,22 @@ async function handleTgPing(request, env) {
         }
       } catch (e) {}
     }));
+  }
+  // Resurrect previously-cached users so we don't lose people whose
+  // messages have aged out of the 24h getUpdates window. Their actual
+  // membership is still re-verified below; if they really left, the
+  // membership check drops them.
+  const cachedUsers = (stateData && stateData.__bot && stateData.__bot.tgUsers) || [];
+  for (const u of cachedUsers) {
+    if (u && u.id && !tgUsersMap[u.id]) {
+      tgUsersMap[u.id] = {
+        id: u.id,
+        username: u.username || null,
+        first_name: u.first_name || null,
+        last_name: u.last_name || null,
+        avatar_url: u.avatar_url || `https://killhouse-vfx.contora.workers.dev/tg/avatar?u=${u.id}`,
+      };
+    }
   }
   // Filter captured users — keep those active in at least one interesting chat
   let tgUsers = [];
