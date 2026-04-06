@@ -128,6 +128,24 @@
   .login-box .login-btn { background: #1f6feb; border: none; color: #fff; padding: 10px 0; border-radius: 8px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; margin-bottom: 10px; }
   .login-box .login-btn:hover { background: #388bfd; }
   .login-box .guest-btn { background: transparent; border: 1px solid #30363d; color: #8b949e; padding: 10px 0; border-radius: 8px; font-size: 13px; width: 100%; cursor: pointer; margin-bottom: 10px; }
+  .login-box.picker-mode { width: 460px; }
+  #loginPickerView.hidden, #loginPassView.hidden { display: none; }
+  .login-pickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; margin: 18px 0 14px; }
+  .login-picker-card { position: relative; background: #0d1117; border: 1px solid #21262d; border-radius: 12px; padding: 14px 8px 12px; cursor: pointer; transition: 0.15s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .login-picker-card:hover { border-color: #58a6ff; transform: translateY(-2px); }
+  .login-picker-card.add-card { border: 1px dashed #30363d; }
+  .login-picker-card.add-card:hover { border-color: #58a6ff; }
+  .login-picker-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .login-picker-avatar.add { background: #161b22; border: 1px solid #30363d; color: #8b949e; font-size: 28px; font-weight: 400; }
+  .login-picker-name { font-size: 13px; color: #c9d1d9; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .login-picker-role { font-size: 9px; color: #484f58; text-transform: uppercase; letter-spacing: 0.3px; margin-top: -4px; }
+  .login-picker-remove { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; background: #161b22; border: 1px solid #30363d; color: #8b949e; cursor: pointer; font-size: 12px; line-height: 1; display: none; align-items: center; justify-content: center; padding: 0; }
+  .login-picker-card:hover .login-picker-remove { display: flex; }
+  .login-picker-remove:hover { background: #f85149; color: #fff; border-color: #f85149; }
+  #loginPickedHeader { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
+  #loginPickedHeader.hidden { display: none; }
+  #loginPickedHeader .login-picker-avatar { width: 64px; height: 64px; font-size: 24px; }
+  #loginPickedHeader .login-picker-name { font-size: 16px; }
   .login-box .guest-btn:hover { background: #161b22; color: #c9d1d9; border-color: #484f58; }
   .login-divider { color: #484f58; font-size: 12px; margin: 6px 0 14px; }
   .login-error { color: #f85149; font-size: 13px; min-height: 20px; }
@@ -724,14 +742,27 @@
 <body>
 
 <div class="login-overlay" id="loginOverlay">
-  <div class="login-box">
-    <h2>KILLHOUSE VFX</h2>
-    <p>Enter your password to continue</p>
-    <input type="password" id="loginPass" placeholder="Password" autofocus>
-    <button class="login-btn" onclick="tryLogin()">Log In</button>
-    <div class="login-divider">or</div>
-    <button class="guest-btn" onclick="guestLogin()">Continue as Guest (view only)</button>
-    <div class="login-error" id="loginError"></div>
+  <div class="login-box" id="loginBox">
+    <!-- Picker view (rendered by _renderLoginBox when known accounts exist) -->
+    <div id="loginPickerView" class="hidden">
+      <h2>KILLHOUSE VFX</h2>
+      <p id="loginPickerSubtitle">Who's logging in?</p>
+      <div class="login-pickers" id="loginPickerList"></div>
+      <div class="login-divider">or</div>
+      <button class="guest-btn" onclick="guestLogin()">Continue as Guest (view only)</button>
+    </div>
+    <!-- Password view (default for first-time / "Add account" / picked account) -->
+    <div id="loginPassView">
+      <h2>KILLHOUSE VFX</h2>
+      <p id="loginPassSubtitle">Enter your password to continue</p>
+      <div id="loginPickedHeader" class="hidden"></div>
+      <input type="password" id="loginPass" placeholder="Password" autofocus>
+      <button class="login-btn" onclick="tryLogin()">Log In</button>
+      <div class="login-divider">or</div>
+      <button class="guest-btn" onclick="guestLogin()">Continue as Guest (view only)</button>
+      <button id="loginBackBtn" class="hidden" style="background:none;border:none;color:#8b949e;font-size:11px;cursor:pointer;margin-top:6px" onclick="_loginBackToPicker()">← Back to accounts</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
   </div>
 </div>
 
@@ -900,7 +931,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0036</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0037</div>
 
 <script>
 const USERS = {
@@ -914,7 +945,119 @@ let currentUser=null;
 function _persistUser(id){try{localStorage.setItem("kh_user",id);}catch(e){}try{sessionStorage.setItem("kh_user",id);}catch(e){}}
 function _readPersistedUser(){try{const v=localStorage.getItem("kh_user");if(v)return v;}catch(e){}try{return sessionStorage.getItem("kh_user");}catch(e){}return null;}
 function _clearPersistedUser(){try{localStorage.removeItem("kh_user");}catch(e){}try{sessionStorage.removeItem("kh_user");}catch(e){}}
-async function tryLogin(){const p=document.getElementById("loginPass").value.trim();if(!p)return;const h=await sha256(p);for(const[id,u]of Object.entries(USERS)){if(u.hash===h){currentUser={id,...u};_persistUser(id);showLoggedIn();return;}}document.getElementById("loginError").textContent="Wrong password";}
+/* ── Known-accounts picker (Chrome-style) ── */
+const KH_KNOWN_USERS_KEY="kh_known_users";
+function _readKnownAccounts(){
+  try{const v=JSON.parse(localStorage.getItem(KH_KNOWN_USERS_KEY)||'[]');return Array.isArray(v)?v:[];}catch(e){return [];}
+}
+function _writeKnownAccounts(list){
+  try{localStorage.setItem(KH_KNOWN_USERS_KEY,JSON.stringify(list));}catch(e){}
+}
+function _addKnownAccount(id){
+  if(!id||id==='guest')return;
+  const u=USERS[id];if(!u)return;
+  const list=_readKnownAccounts().filter(a=>a.id!==id);
+  list.unshift({id,display:u.display||id,role:u.role||'artist',color:getUserColor(id)||'#58a6ff',lastLogin:Date.now()});
+  _writeKnownAccounts(list.slice(0,8));
+}
+function _removeKnownAccount(id){
+  _writeKnownAccounts(_readKnownAccounts().filter(a=>a.id!==id));
+  _renderLoginBox();
+}
+function _initialsFor(name){
+  return String(name||'').trim().split(/\s+/).slice(0,2).map(p=>p[0]||'').join('').toUpperCase()||'?';
+}
+let _pickedLoginId=null;
+function _renderLoginBox(){
+  const accounts=_readKnownAccounts();
+  const box=document.getElementById('loginBox');
+  const pickerView=document.getElementById('loginPickerView');
+  const passView=document.getElementById('loginPassView');
+  const list=document.getElementById('loginPickerList');
+  if(!box||!pickerView||!passView)return;
+  if(accounts.length&&!_pickedLoginId){
+    box.classList.add('picker-mode');
+    pickerView.classList.remove('hidden');
+    passView.classList.add('hidden');
+    let html='';
+    accounts.forEach(a=>{
+      const initials=_initialsFor(a.display);
+      html+=`<div class="login-picker-card" onclick="_pickLoginAccount('${esc(a.id)}')">`
+        +`<button class="login-picker-remove" onclick="event.stopPropagation();_removeKnownAccount('${esc(a.id)}')" title="Remove">×</button>`
+        +`<div class="login-picker-avatar" style="background:${esc(a.color||'#58a6ff')}">${esc(initials)}</div>`
+        +`<div class="login-picker-name">${esc(a.display)}</div>`
+        +`<div class="login-picker-role">${esc(a.role||'')}</div>`
+        +`</div>`;
+    });
+    html+=`<div class="login-picker-card add-card" onclick="_pickLoginAccount(null)">`
+      +`<div class="login-picker-avatar add">+</div>`
+      +`<div class="login-picker-name">Add account</div>`
+      +`<div class="login-picker-role">&nbsp;</div>`
+      +`</div>`;
+    list.innerHTML=html;
+  } else {
+    pickerView.classList.add('hidden');
+    passView.classList.remove('hidden');
+    const head=document.getElementById('loginPickedHeader');
+    const subtitle=document.getElementById('loginPassSubtitle');
+    const back=document.getElementById('loginBackBtn');
+    if(_pickedLoginId){
+      const a=accounts.find(x=>x.id===_pickedLoginId);
+      const display=a?.display||_pickedLoginId;
+      const color=a?.color||'#58a6ff';
+      head.classList.remove('hidden');
+      head.innerHTML=`<div class="login-picker-avatar" style="background:${esc(color)}">${esc(_initialsFor(display))}</div><div class="login-picker-name">${esc(display)}</div>`;
+      if(subtitle)subtitle.textContent='Enter password';
+      box.classList.remove('picker-mode');
+      back.classList.toggle('hidden',accounts.length===0);
+    } else {
+      head.classList.add('hidden');
+      if(subtitle)subtitle.textContent='Enter your password to continue';
+      back.classList.toggle('hidden',accounts.length===0);
+    }
+    setTimeout(()=>document.getElementById('loginPass')?.focus(),50);
+  }
+}
+function _pickLoginAccount(id){
+  _pickedLoginId=id;
+  _renderLoginBox();
+}
+function _loginBackToPicker(){
+  _pickedLoginId=null;
+  document.getElementById('loginPass').value='';
+  document.getElementById('loginError').textContent='';
+  _renderLoginBox();
+}
+async function tryLogin(){
+  const p=document.getElementById("loginPass").value.trim();
+  if(!p)return;
+  const h=await sha256(p);
+  // If a specific account was picked, only accept that account's password
+  if(_pickedLoginId){
+    const u=USERS[_pickedLoginId];
+    if(u&&u.hash===h){
+      currentUser={id:_pickedLoginId,...u};
+      _persistUser(_pickedLoginId);
+      _addKnownAccount(_pickedLoginId);
+      _pickedLoginId=null;
+      showLoggedIn();
+      return;
+    }
+    document.getElementById("loginError").textContent="Wrong password";
+    return;
+  }
+  // No account picked → match by hash like before (works for any user)
+  for(const[id,u] of Object.entries(USERS)){
+    if(u.hash===h){
+      currentUser={id,...u};
+      _persistUser(id);
+      _addKnownAccount(id);
+      showLoggedIn();
+      return;
+    }
+  }
+  document.getElementById("loginError").textContent="Wrong password";
+}
 function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};_persistUser("guest");showLoggedIn();}
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
 async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
@@ -992,7 +1135,7 @@ function _handlePlayerDeepLink(){
   if(vIdx!==null&&!isNaN(vIdx))_setPlayerCache(playerId,vIdx);
   setTimeout(()=>openGif(playerId),100);
 }
-function logout(){_clearPersistedUser();currentUser=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";render();}
+function logout(){_clearPersistedUser();currentUser=null;_pickedLoginId=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";_renderLoginBox();render();}
 // Auto-login deferred until after SUPA_URL is defined (see below)
 
 function isAdmin(){return currentUser&&currentUser.role==="admin";}
@@ -1137,6 +1280,7 @@ function _tryAuthLink(){
     if(!USERS[userId])USERS[userId]=u;
     currentUser={id:userId,...USERS[userId]};
     _persistUser(userId);
+    _addKnownAccount(userId);
     showLoggedIn();
     return true;
   }
@@ -1144,6 +1288,9 @@ function _tryAuthLink(){
 }
 // Auth link + auto-login deferred to after state init (see _initAuth below)
 function _initAuth(){
+  // Render the picker (or empty password view) before any async work so it
+  // shows immediately on first paint when no session is restored.
+  _renderLoginBox();
   (async function(){
     const params=new URLSearchParams(window.location.search);
     if(params.get('auth')){
@@ -1159,7 +1306,13 @@ function _initAuth(){
         await _pullRemote();
         if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
       }
-      if(USERS[s]){currentUser={id:s,...USERS[s]};showLoggedIn();}
+      if(USERS[s]){currentUser={id:s,...USERS[s]};_addKnownAccount(s);showLoggedIn();}
+    } else {
+      // Make sure the picker shows known accounts after we've pulled
+      // remote state (so display names / colors are accurate).
+      try{await _pullRemote();}catch(e){}
+      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+      _renderLoginBox();
     }
   })();
 }
