@@ -881,7 +881,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0025</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0026</div>
 
 <script>
 const USERS = {
@@ -3634,11 +3634,9 @@ function _updatePlayerPushBtn(){
   btn.classList.remove('hidden');
   const assignee=getAssignee(_gifCurrentId);
   if(!assignee){btn.disabled=true;btn.title="No assignee";return;}
-  // Admins: always enabled (1s debounce handled in handler)
-  if(isAdmin()){btn.disabled=false;btn.title=`Push current version to ${assignee}`;return;}
-  const key=_versionKey(_gifVersionIdx);
-  const pushed=state[_gifCurrentId]?.playerPushed||{};
-  if(pushed[key]){btn.disabled=true;btn.title="Already pushed for this version";return;}
+  // No lifetime lockout — anyone allowed to push can re-push the same
+  // version. The 1s _tgAdminDebounce in the handler protects from
+  // accidental double clicks.
   btn.disabled=false;btn.title=`Push current version to ${assignee}`;
 }
 async function pushPlayerNotification(){
@@ -3651,8 +3649,6 @@ async function pushPlayerNotification(){
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
   const key=_versionKey(_gifVersionIdx);
-  const pushed=state[_gifCurrentId]?.playerPushed||{};
-  if(!isAdmin()&&pushed[key]){alert("Already pushed for this version");return;}
   const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
   const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
   // Resolve preview thumbnail URL (public R2 CDN URL)
