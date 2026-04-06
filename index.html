@@ -55,6 +55,10 @@
   .bot-artist-fallback { color: #484f58; font-size: 9px; }
   .bot-thread-input { width: 90px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 5px 8px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', monospace; }
   .bot-thread-input:focus { border-color: #1f6feb; outline: none; }
+  .bot-topic-select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 5px 8px; border-radius: 4px; font-size: 12px; min-width: 160px; cursor: pointer; }
+  .bot-topic-select:focus { border-color: #1f6feb; outline: none; }
+  .bot-topic-select option { background: #0d1117; color: #c9d1d9; }
+  .bot-thread-tag { display: inline-block; margin-left: 6px; font-family: 'SF Mono', monospace; font-size: 10px; color: #484f58; user-select: none; }
   .bot-test-btn { background: rgba(255,255,255,0.06); border: 1px solid #30363d; color: #c9d1d9; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; }
   .bot-test-btn:hover { background: #30363d; border-color: #58a6ff; }
   .bot-cd-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; color: #c9d1d9; }
@@ -856,7 +860,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0019</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0020</div>
 
 <script>
 const USERS = {
@@ -1904,16 +1908,29 @@ function _renderBotSettings(){
   for(const k of Object.keys(liveNames)){
     if(cfg.topicNames[k]!==liveNames[k]){cfg.topicNames[k]=liveNames[k];}
   }
-  const getTopicName=(tid)=>tid?(liveNames[tid]||cfg.topicNames[tid]||null):null;
-  html+=`<div class="bot-section"><div class="bot-section-title">Artists &amp; Topics</div><div class="bot-section-hint">Topic names are discovered automatically from recent activity in the supergroup. If a topic shows no name, ask its owner to send any message in their thread, then click <b>Refresh</b>.</div><table class="bot-artists-table"><thead><tr><th>Artist</th><th>Topic</th><th>thread_id</th><th></th></tr></thead><tbody>`;
+  // Build a sorted list of all known topics (live discovery + state cache + currently assigned)
+  const allTopicIds=new Set([...Object.keys(liveNames),...Object.keys(cfg.topicNames||{})]);
+  artists.forEach(a=>{
+    const tid=cfg.artistThreads[a.id]||workerThreads[a.id]||hardcoded[a.id];
+    if(tid)allTopicIds.add(String(tid));
+  });
+  const topicOptions=[...allTopicIds].map(tid=>({
+    tid:parseInt(tid,10),
+    name:liveNames[tid]||cfg.topicNames[tid]||`Topic ${tid}`,
+  })).sort((a,b)=>a.name.localeCompare(b.name));
+  html+=`<div class="bot-section"><div class="bot-section-title">Artists &amp; Topics</div><div class="bot-section-hint">Pick the Telegram topic each artist should receive pushes in. Topic names are discovered from recent activity — if you don't see one, ask the owner to send any message in their thread, then click <b>Refresh</b>.</div><table class="bot-artists-table"><thead><tr><th>Artist</th><th>Topic</th><th></th></tr></thead><tbody>`;
   artists.forEach(a=>{
     const stateTid=cfg.artistThreads[a.id];
-    const effectiveTid=stateTid||workerThreads[a.id]||hardcoded[a.id]||'';
-    const showVal=stateTid||(workerThreads[a.id]||hardcoded[a.id])||'';
-    const topicName=getTopicName(effectiveTid);
-    const fallbackHint=(!stateTid&&hardcoded[a.id])?` <span class="bot-artist-fallback">(default)</span>`:'';
-    const topicCell=topicName?`<span class="bot-topic-name">${esc(topicName)}</span>`:`<span class="bot-topic-unknown">— unknown —</span>`;
-    html+=`<tr><td>${esc(a.display)}<div class="bot-artist-id">${esc(a.id)}${fallbackHint}</div></td><td>${topicCell}</td><td><input type="number" class="bot-thread-input" data-artist="${esc(a.id)}" value="${esc(String(showVal))}" placeholder="${esc(String(hardcoded[a.id]||''))}" min="0"></td><td><button class="bot-test-btn" onclick="_testBotPush('${esc(a.id)}')">Test</button></td></tr>`;
+    const effectiveTid=parseInt(stateTid||workerThreads[a.id]||hardcoded[a.id]||0,10);
+    const isFallback=!stateTid&&!!hardcoded[a.id];
+    const fallbackHint=isFallback?` <span class="bot-artist-fallback">(default)</span>`:'';
+    let optsHtml=`<option value="">— none —</option>`;
+    topicOptions.forEach(o=>{
+      const sel=o.tid===effectiveTid?' selected':'';
+      optsHtml+=`<option value="${o.tid}"${sel}>${esc(o.name)}</option>`;
+    });
+    const tidLabel=effectiveTid?`<span class="bot-thread-tag">id ${effectiveTid}</span>`:'';
+    html+=`<tr><td>${esc(a.display)}<div class="bot-artist-id">${esc(a.id)}${fallbackHint}</div></td><td><select class="bot-topic-select" data-artist="${esc(a.id)}">${optsHtml}</select> ${tidLabel}</td><td><button class="bot-test-btn" onclick="_testBotPush('${esc(a.id)}')">Test</button></td></tr>`;
   });
   html+=`</tbody></table><div style="margin-top:8px;text-align:right"><button class="bot-test-btn" onclick="_refreshBotStatus()">↻ Refresh</button></div></div>`;
   // ── COOLDOWNS ──
@@ -1947,10 +1964,10 @@ async function _refreshBotStatus(){
 }
 function _saveBotSettings(){
   const cfg=_getBotConfig();
-  // Threads
-  document.querySelectorAll('.bot-thread-input').forEach(inp=>{
-    const aid=inp.dataset.artist;
-    const v=parseInt(inp.value,10);
+  // Threads (from dropdowns)
+  document.querySelectorAll('.bot-topic-select').forEach(sel=>{
+    const aid=sel.dataset.artist;
+    const v=parseInt(sel.value,10);
     if(!isNaN(v)&&v>0)cfg.artistThreads[aid]=v;
     else delete cfg.artistThreads[aid];
   });
@@ -1966,11 +1983,12 @@ async function _testBotPush(artistId){
   if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
     alert("No link token");return;
   }
-  // Save the current input value first so the worker uses the new thread_id
-  const inp=document.querySelector(`.bot-thread-input[data-artist="${artistId}"]`);
-  if(inp){
+  // Persist the currently selected dropdown value first so the worker
+  // uses the new thread_id when sending the test message.
+  const sel=document.querySelector(`.bot-topic-select[data-artist="${artistId}"]`);
+  if(sel){
     const cfg=_getBotConfig();
-    const v=parseInt(inp.value,10);
+    const v=parseInt(sel.value,10);
     if(!isNaN(v)&&v>0){cfg.artistThreads[artistId]=v;await new Promise(res=>{saveState(state);setTimeout(res,500);});}
   }
   try{
