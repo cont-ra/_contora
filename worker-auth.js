@@ -168,12 +168,16 @@ async function handleTgPush(request, env) {
   }
 
   // ── DEFAULT (chat / non-video) ──
+  // Hierarchy: header → by → small italic kind line → BIG BOLD content → comment
+  // Inline-keyboard button replaces the in-text "Open in tracker" link.
   const headerLine = safeDesc ? `<b>${safeShot}</b> — ${safeDesc}` : `<b>${safeShot}</b>`;
-  const kindLine = safeKind ? `\n📦 Pushed: ${safeKind}` : '';
   const fromLine = `\n👤 By: ${safeFrom}`;
-  const bodyLine = safeText ? `\n\n💬 «${safeText}»` : '';
+  const kindLine = safeKind ? `\n<i>pushed ${safeKind}</i>` : '';
+  const bodyLine = safeText ? `\n\n<b>«${safeText}»</b>` : '';
   const commentLine = safeComment ? `\n\n📝 ${safeComment}` : '';
-  const msg = `🔔 ${headerLine}${kindLine}${fromLine}${bodyLine}${commentLine}${linkLine}`;
+  const msg = `🔔 ${headerLine}${fromLine}${kindLine}${bodyLine}${commentLine}`;
+  const directChatLink = safeLink || `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(shotId)}`;
+  const reply_markup = { inline_keyboard: [[{ text: '💬 Open in chat', url: directChatLink }]] };
   const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
   const tgResp = await fetch(tgUrl, {
     method: 'POST',
@@ -184,6 +188,7 @@ async function handleTgPush(request, env) {
       text: msg,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
+      reply_markup,
     }),
   });
   const tgData = await tgResp.json().catch(() => ({}));
