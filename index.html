@@ -825,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0012</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0013</div>
 
 <script>
 const USERS = {
@@ -3147,7 +3147,9 @@ function chatToggleSelect(mid,el){
 
 /* ── Telegram Push notification ── */
 const TG_PUSH_URL='https://killhouse-vfx.contora.workers.dev/tg/push';
-const TG_PUSH_COOLDOWN_MS=60000;
+const TG_PUSH_COOLDOWN_MS=60000;       // artist cooldown for "no selection" mode
+const TG_ADMIN_DEBOUNCE_MS=1000;       // admin global debounce against double clicks
+let _lastPushAt=0;                     // local timestamp of last successful push (admin debounce)
 
 function _canPushChat(shotId){
   if(!shotId||!currentUser)return false;
@@ -3167,6 +3169,15 @@ function _updatePushBtn(){
   if(!assignee){btn.disabled=true;btn.title="No assignee";return;}
   const selSize=_chatSelected.size;
   if(selSize>1){btn.disabled=true;btn.title="Select only one message";return;}
+  // Admins: skip "already pushed" / 60s cooldown — they always have a push button
+  if(isAdmin()){
+    if(selSize===1){btn.disabled=false;btn.title=`Push selected message to ${assignee}`;return;}
+    const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
+    if(!chat.length){btn.disabled=true;btn.title="No messages to push";return;}
+    btn.disabled=false;btn.title=`Push latest message to ${assignee}`;
+    return;
+  }
+  // Artists: keep once-per-message rule + 60s cooldown
   if(selSize===1){
     const mid=[..._chatSelected][0];
     const m=(state[noteTaskId]?.artistNotes||[]).find(x=>x.id===mid);
@@ -3174,7 +3185,6 @@ function _updatePushBtn(){
     btn.disabled=false;btn.title=`Push selected message to ${assignee}`;
     return;
   }
-  // No selection — push latest, with cooldown
   const lastPush=state[noteTaskId]?.chatLastPush||0;
   const elapsed=Date.now()-lastPush;
   if(elapsed<TG_PUSH_COOLDOWN_MS){
@@ -3182,7 +3192,7 @@ function _updatePushBtn(){
     btn.disabled=true;btn.title=`Wait ${remain}s before next push`;
     return;
   }
-  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted);
+  const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
   if(!chat.length){btn.disabled=true;btn.title="No messages to push";return;}
   btn.disabled=false;btn.title=`Push latest message to ${assignee}`;
 }
@@ -3200,6 +3210,8 @@ async function pushChatNotification(){
   if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
+  // Global admin debounce against accidental double clicks
+  if(Date.now()-_lastPushAt<TG_ADMIN_DEBOUNCE_MS)return;
   const chat=(state[noteTaskId]?.artistNotes||[]).filter(m=>!m.deleted&&!m.system);
   let msg=null,isSelected=false;
   if(_chatSelected.size>1){alert("Select only one message");return;}
@@ -3207,13 +3219,15 @@ async function pushChatNotification(){
     const mid=[..._chatSelected][0];
     msg=chat.find(x=>x.id===mid);
     if(!msg){alert("Message not found");return;}
-    if(msg.pushed){alert("Already pushed");return;}
+    if(!isAdmin()&&msg.pushed){alert("Already pushed");return;}
     isSelected=true;
   } else {
-    const lastPush=state[noteTaskId]?.chatLastPush||0;
-    if(Date.now()-lastPush<TG_PUSH_COOLDOWN_MS){
-      const remain=Math.ceil((TG_PUSH_COOLDOWN_MS-(Date.now()-lastPush))/1000);
-      alert(`Wait ${remain}s`);return;
+    if(!isAdmin()){
+      const lastPush=state[noteTaskId]?.chatLastPush||0;
+      if(Date.now()-lastPush<TG_PUSH_COOLDOWN_MS){
+        const remain=Math.ceil((TG_PUSH_COOLDOWN_MS-(Date.now()-lastPush))/1000);
+        alert(`Wait ${remain}s`);return;
+      }
     }
     if(!chat.length){alert("No messages to push");return;}
     msg=chat[chat.length-1];
@@ -3245,6 +3259,7 @@ async function pushChatNotification(){
     if(!state[noteTaskId])state[noteTaskId]={};
     if(isSelected){msg.pushed=true;msg.pushedBy=currentUser.id;msg.pushedAt=Date.now();}
     else{state[noteTaskId].chatLastPush=Date.now();}
+    _lastPushAt=Date.now();
     // Leave a system note in the chat
     const sysText=`Pushed ${kindLabel} to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
     _appendSystemChatMsg(noteTaskId,sysText);
@@ -3282,6 +3297,8 @@ function _updatePlayerPushBtn(){
   btn.classList.remove('hidden');
   const assignee=getAssignee(_gifCurrentId);
   if(!assignee){btn.disabled=true;btn.title="No assignee";return;}
+  // Admins: always enabled (1s debounce handled in handler)
+  if(isAdmin()){btn.disabled=false;btn.title=`Push current version to ${assignee}`;return;}
   const key=_versionKey(_gifVersionIdx);
   const pushed=state[_gifCurrentId]?.playerPushed||{};
   if(pushed[key]){btn.disabled=true;btn.title="Already pushed for this version";return;}
@@ -3295,9 +3312,10 @@ async function pushPlayerNotification(){
   if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
+  if(Date.now()-_lastPushAt<TG_ADMIN_DEBOUNCE_MS)return;
   const key=_versionKey(_gifVersionIdx);
   const pushed=state[_gifCurrentId]?.playerPushed||{};
-  if(pushed[key]){alert("Already pushed for this version");return;}
+  if(!isAdmin()&&pushed[key]){alert("Already pushed for this version");return;}
   const versionLabel=_versionLabel(_gifCurrentId,_gifVersionIdx);
   const versionNumber=_gifVersionIdx<0?'Source':(_extractVersionNumber(versionLabel)||('v'+(_gifVersionIdx+1)));
   // Resolve preview thumbnail URL (public R2 CDN URL)
@@ -3333,6 +3351,7 @@ async function pushPlayerNotification(){
     if(!state[_gifCurrentId])state[_gifCurrentId]={};
     if(!state[_gifCurrentId].playerPushed)state[_gifCurrentId].playerPushed={};
     state[_gifCurrentId].playerPushed[key]={by:currentUser.id,at:Date.now()};
+    _lastPushAt=Date.now();
     // System note in chat
     const sysText=`Pushed video (${versionNumber}) to Telegram by ${fromUser}${comment?` — "${comment}"`:""}`;
     _appendSystemChatMsg(_gifCurrentId,sysText);
