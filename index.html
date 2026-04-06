@@ -825,7 +825,7 @@
   <tbody id="tbody"></tbody>
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
-<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0015</div>
+<div style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0016</div>
 
 <script>
 const USERS = {
@@ -1165,7 +1165,39 @@ runMigrations();
 if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}
 _loadCustomCats();
 let _pubUploadMode=false;
-if(!_checkPublicUpload()) _initAuth();
+// Mobile fallback: until the site has a real mobile UI, anyone landing here
+// from a Telegram deep link on a phone gets redirected straight to the
+// version's video URL on R2 so they can watch it inline.
+function _checkMobilePlayerRedirect(){
+  const isMobile=/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent||'');
+  if(!isMobile)return false;
+  const params=new URLSearchParams(window.location.search);
+  const shotId=params.get('player');
+  if(!shotId)return false;
+  const vRaw=params.get('v');
+  const vIdx=vRaw!==null&&vRaw!==''?parseInt(vRaw,10):-1;
+  // Hide everything immediately so the desktop UI does not flash
+  document.documentElement.style.background='#000';
+  document.querySelectorAll('body > *:not(script):not(link)').forEach(el=>el.style.display='none');
+  // CDN_BASE is declared later in this script (TDZ); inline the literal here.
+  const _R2_CDN="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
+  (async()=>{
+    let videoUrl=null;
+    if(!isNaN(vIdx)&&vIdx>=0){
+      // Need fresh state to know the version's URL
+      try{await _pullRemote();}catch(e){}
+      const v=state[shotId]?.versions?.[vIdx];
+      if(v&&v.url)videoUrl=v.url;
+    }
+    if(!videoUrl){
+      // Source preview (or fallback if version unknown)
+      videoUrl=_R2_CDN+"/video/"+shotId+"_prev.mp4";
+    }
+    window.location.replace(videoUrl);
+  })();
+  return true;
+}
+if(!_checkMobilePlayerRedirect()&&!_checkPublicUpload()) _initAuth();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 
