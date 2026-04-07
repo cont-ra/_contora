@@ -548,12 +548,39 @@ async function handleTgPing(request, env) {
                 node.users[uid].first_name = m.from.first_name || node.users[uid].first_name;
                 if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
               }
-              // Send the user the actual download URL (carrying their uid)
+              // Send the user the actual download URL (carrying their uid),
+              // plus the full file list so they can see what's inside
+              // before clicking through to the page.
               try {
                 const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}&u=${encodeURIComponent(uid)}`;
-                const replyText =
-                  `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!\n\n` +
-                  `Tap the button below to open your download page.`;
+                // Build per-shot file list straight from stateData
+                const share = (stateData && stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
+                const ids = (share && share.ids) || [];
+                const fileLines = [];
+                let totalBytes = 0, totalFiles = 0;
+                for (const sid of ids) {
+                  const arr = (stateData && stateData[sid] && stateData[sid].files && stateData[sid].files['versions/final']) || [];
+                  for (const f of arr) {
+                    fileLines.push('• ' + _escapeHtml(sid + '_FINAL/' + (f.name || '')));
+                    totalBytes += (f.size || 0);
+                    totalFiles += 1;
+                  }
+                }
+                const sizeStr = totalBytes
+                  ? (totalBytes < 1024 * 1024
+                    ? Math.round(totalBytes / 1024) + ' KB'
+                    : totalBytes < 1024 * 1024 * 1024
+                      ? (totalBytes / (1024 * 1024)).toFixed(1) + ' MB'
+                      : (totalBytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB')
+                  : '';
+                const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
+                const summary = totalFiles
+                  ? `\n\n<b>${totalFiles} file${totalFiles !== 1 ? 's' : ''}${sizeStr ? ' · ' + sizeStr : ''}</b>`
+                  : '';
+                const list = fileLines.length
+                  ? '\n\n' + fileLines.slice(0, 40).join('\n') + (fileLines.length > 40 ? `\n…+${fileLines.length - 40} more` : '')
+                  : '';
+                const replyText = header + summary + list;
                 await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
