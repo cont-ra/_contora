@@ -162,7 +162,9 @@
   .search-row input::placeholder { color: #484f58; }
   .artist-card { background: #161b22; border-radius: 8px; padding: 6px 12px; text-align: center; min-width: 80px; transition: .15s; cursor: pointer; user-select: none; border: 1px solid #30363d; }
   .artist-card:hover { border-color: #58a6ff !important; }
-  .artist-card.active { border-width: 2px !important; background: #1f2937; }
+  /* Active state: outline instead of border-width change so the padding
+     box doesn't shift by 1px (which broke the absolute-positioned tabs). */
+  .artist-card.active { outline: 1px solid currentColor; outline-offset: -1px; background: #1f2937; }
   .separator { color: #30363d; font-size: 18px; user-select: none; }
   table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
   thead th { background: #21262d; padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #30363d; cursor: pointer; user-select: none; white-space: nowrap; position: relative; }
@@ -960,7 +962,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0075</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0076</div>
 
 <script>
 const USERS = {
@@ -3982,11 +3984,11 @@ function updateStats(){
       // half-drawn one in the footer line).
       const doneBadge=s.done>0?`<div style="position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid #30363d;border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:1px 9px 3px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">✓ ${s.done}</div>`:'';
       const reviewBadge=s.review>0?`<div style="position:absolute;left:50%;bottom:0;transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid #30363d;border-top-color:#161b22;border-radius:0 0 8px 8px;padding:2px 9px 1px;font-size:10px;font-weight:600;line-height:1.2;display:flex;align-items:center;gap:3px">◉ ${s.review}</div>`:'';
-      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
+      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'};color:${col}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
         ${doneBadge}
-        <div style="font-size:11px;color:#8b949e;font-weight:600;margin-bottom:2px">${esc(a.display)}</div>
-        <div style="font-size:18px;font-weight:700;color:${col};line-height:1.1">${active}</div>
-        <div style="font-size:9px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px"><span style="color:#a13730">${s.todo}○</span><span style="color:#896318">${s.progress}◐</span></div>
+        <div style="font-size:11px;color:#8b949e;font-weight:600">${esc(a.display)}</div>
+        <div style="font-size:20px;font-weight:700;color:${col};line-height:1.1;margin-top:6px">${active}</div>
+        <div style="font-size:9px;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px"><span style="color:#a13730">${s.todo}○</span><span style="color:#896318">${s.progress}◐</span></div>
         ${reviewBadge}
       </div>`;
     });
