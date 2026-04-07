@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0062</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0063</div>
 
 <script>
 const USERS = {
@@ -1522,7 +1522,12 @@ function _initRealtime(){
             localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
             // Skip heavy re-renders while upload queue is active — causes scroll interruption
             if(_uploadQueue.processing){return;}
-            runMigrations();render();
+            runMigrations();
+            // Refresh GIFS so any newly-uploaded preview is visible without
+            // a page reload. _initGifs is hoisted (function declaration) so
+            // it's available even though defined later in the file.
+            if(typeof _initGifs==='function')_initGifs();
+            render();
             if(_gifCurrentId)renderPlayerNotes();
             if(noteTaskId&&noteType==='chat')renderChat();
             if(_shotCurrentId&&_shotTab==='files')_renderShotFiles(_shotCurrentId);
@@ -8289,6 +8294,13 @@ function _updateSortArrows(){
 }
 document.getElementById("search").addEventListener("input",e=>{searchQuery=e.target.value;render();});
 
+// Populate GIFS synchronously before the first render so thumbnail
+// previews are visible from the very first paint. Without this the
+// initial render runs with an empty GIFS set, builds rows with no
+// thumbs, and the later render() inside showLoggedIn takes the patch
+// path which intentionally skips thumb cells — leaving black squares
+// until the legacy onload check forces a full rebuild seconds later.
+_initGifs();
 render();
 
 // Fallback poll every 15s in case WebSocket drops
