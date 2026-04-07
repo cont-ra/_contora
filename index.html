@@ -957,7 +957,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0050</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0051</div>
 
 <script>
 const USERS = {
@@ -2065,8 +2065,65 @@ function _shareDownloadLink(ids,title){
   const ov=document.createElement("div");
   ov.className="confirm-overlay";ov.id="dlShareOverlay";
   const list=ids.map(i=>'• '+esc(i)).join('<br>');
-  ov.innerHTML=`<div class="confirm-box" style="text-align:left;max-width:520px"><div class="confirm-title" style="color:#3fb950">📥 Download Share Link</div><div class="confirm-msg" style="text-align:left">${esc(title)}<br><span style="font-size:11px;color:#8b949e">${list}</span><br><br><span style="font-size:11px;color:#484f58">Anyone with this link can download these files.</span></div><div class="af-share-row"><code id="dlShareUrl">${esc(url)}</code><button id="dlCopyBtn" onclick="_dlCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="confirm-btn cancel" onclick="_dlRevokeShare('${esc(token)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('dlShareOverlay').remove()">Close</button></div></div>`;
+  // Stash for the push handler
+  window.__lastShareIds=ids;
+  window.__lastShareUrl=url;
+  // Show client-push button only when admin AND at least one client chat configured
+  const clientChats=state.__bot?.clientChats||[];
+  const canPushClient=isAdmin()&&clientChats.length>0;
+  const pushBtn=canPushClient?`<button class="confirm-btn" id="dlPushClientBtn" onclick="_pushDownloadShareToClient()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">📤 Push to client chat</button>`:'';
+  ov.innerHTML=`<div class="confirm-box" style="text-align:left;max-width:520px"><div class="confirm-title" style="color:#3fb950">📥 Download Share Link</div><div class="confirm-msg" style="text-align:left">${esc(title)}<br><span style="font-size:11px;color:#8b949e">${list}</span><br><br><span style="font-size:11px;color:#484f58">Anyone with this link can download these files.</span></div><div class="af-share-row"><code id="dlShareUrl">${esc(url)}</code><button id="dlCopyBtn" onclick="_dlCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${pushBtn}<button class="confirm-btn cancel" onclick="_dlRevokeShare('${esc(token)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('dlShareOverlay').remove()">Close</button></div></div>`;
   document.body.appendChild(ov);
+}
+async function _pushDownloadShareToClient(){
+  if(!isAdmin())return;
+  const ids=window.__lastShareIds||[];
+  const url=window.__lastShareUrl||'';
+  if(!ids.length||!url)return;
+  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+    alert("Your account has no link token. Ask admin to regenerate.");return;
+  }
+  if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
+  // Pick which client chat
+  const targetChatId=await _pickClientChat();
+  if(!targetChatId)return;
+  // Collect file list (across all selected shots) for the message body
+  const fileNames=[];
+  for(const id of ids){
+    const arr=(state[id]?.files?.['versions/final'])||[];
+    for(const f of arr)fileNames.push(id+'_FINAL/'+f.name);
+  }
+  // Optional comment
+  const subject=`${ids.length} shot${ids.length!==1?'s':''} · ${fileNames.length} file${fileNames.length!==1?'s':''}\n\n→ Sending download link to CLIENT chat`;
+  const comment=await _showPushPrompt("Push download link to client",subject);
+  if(comment===null)return;
+  const fromUser=currentUser.display||currentUser.id;
+  const btn=document.getElementById("dlPushClientBtn");
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  try{
+    const r=await fetch(TG_PUSH_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        kind:"download",
+        link:url,
+        files:fileNames,
+        comment,
+        fromUser,
+        targetChatId,
+        userId:currentUser.id,
+        linkToken:state.__users[currentUser.id].linkToken
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.ok)throw new Error(data.error||('HTTP '+r.status));
+    _lastPushAt=Date.now();
+    if(btn){btn.textContent='Sent ✓';setTimeout(()=>{btn.textContent='📤 Push to client chat';btn.disabled=false;},2000);}
+  }catch(e){
+    console.error("Download share push failed:",e);
+    alert("Push failed: "+(e.message||e));
+    if(btn){btn.textContent='📤 Push to client chat';btn.disabled=false;}
+  }
 }
 function _dlCopyShareLink(){
   const url=document.getElementById("dlShareUrl")?.textContent;

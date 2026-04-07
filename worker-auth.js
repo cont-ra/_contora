@@ -99,8 +99,13 @@ async function handleTgPush(request, env) {
   try { body = await request.json(); } catch (e) {
     return _jsonResp({ ok: false, error: 'bad_json' }, 400, origin);
   }
-  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber, targetChatId, frame, versionIdx, tc } = body || {};
-  if (!shotId || !userId || !linkToken) {
+  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber, targetChatId, frame, versionIdx, tc, files } = body || {};
+  // shotId is required for everything except download-share pushes,
+  // which can span multiple shots and live without a single anchor.
+  if (kind !== 'download' && !shotId) {
+    return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
+  }
+  if (!userId || !linkToken) {
     return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
   }
 
@@ -114,9 +119,18 @@ async function handleTgPush(request, env) {
   // Permission rules:
   //  • Pushing to the default group: admin OR the artist assigned to the shot
   //  • Pushing to any other (client) chat: admin only
+  //  • Download-share push: admin only AND must use targetChatId
   const callerIsAdmin = user.role === 'admin';
   const callerIsAssignee = artistId && user.id === String(artistId).toLowerCase();
   const usingTargetChat = targetChatId && String(targetChatId) !== String(TG_CHAT_ID);
+  if (kind === 'download') {
+    if (!callerIsAdmin) {
+      return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
+    }
+    if (!usingTargetChat) {
+      return _jsonResp({ ok: false, error: 'download_requires_target_chat' }, 400, origin);
+    }
+  }
   if (usingTargetChat) {
     if (!callerIsAdmin) {
       return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
@@ -165,6 +179,43 @@ async function handleTgPush(request, env) {
       return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || tgResp.status }, 502, origin);
     }
     return _jsonResp({ ok: true, mode: 'test', threadId, message_id: tgData.result?.message_id }, 200, origin);
+  }
+
+  // ── DOWNLOAD-SHARE PUSH ──
+  // Sends a plain message to a client chat with ONLY a file list and a
+  // single inline-keyboard "⬇ Download" button pointing at the share URL.
+  // No header, no shot info, no comment block — keep it minimal as
+  // requested by the admin.
+  if (kind === 'download') {
+    const safeLink = String(link || '').replace(/[^a-zA-Z0-9:/?=&._\-#%]/g, '');
+    if (!safeLink) {
+      return _jsonResp({ ok: false, error: 'missing_link' }, 400, origin);
+    }
+    const list = Array.isArray(files) ? files : [];
+    const lines = list.slice(0, 50).map(f => '• ' + _escapeHtml(String(f)));
+    const more = list.length > 50 ? '\n…+' + (list.length - 50) + ' more' : '';
+    const safeComment = _escapeHtml((comment || '').slice(0, 500));
+    const text =
+      (lines.length ? lines.join('\n') : '<i>(no files)</i>') +
+      more +
+      (safeComment ? '\n\n📝 ' + safeComment : '');
+    const reply_markup = { inline_keyboard: [[{ text: '⬇ Download', url: safeLink }]] };
+    const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const tgResp = await fetch(tgUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_withChat({
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup,
+      })),
+    });
+    const tgData = await tgResp.json().catch(() => ({}));
+    if (!tgResp.ok || !tgData.ok) {
+      return _jsonResp({ ok: false, error: 'telegram_failed', detail: tgData.description || tgResp.status }, 502, origin);
+    }
+    return _jsonResp({ ok: true, mode: 'download+button', message_id: tgData.result?.message_id }, 200, origin);
   }
 
   // Build HTML message
