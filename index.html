@@ -754,7 +754,7 @@
 </head>
 <body>
 
-<div class="login-overlay" id="loginOverlay">
+<div class="login-overlay hidden" id="loginOverlay">
   <div class="login-box" id="loginBox">
     <!-- Picker view (rendered by _renderLoginBox when known accounts exist) -->
     <div id="loginPickerView" class="hidden">
@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0061</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0062</div>
 
 <script>
 const USERS = {
@@ -1361,10 +1361,17 @@ function _tryAuthLink(){
   return false;
 }
 // Auth link + auto-login deferred to after state init (see _initAuth below)
-function _initAuth(){
-  // Render the picker (or empty password view) before any async work so it
-  // shows immediately on first paint when no session is restored.
+// Show the login overlay (picker / password view). Called only when an
+// auto-login could not be performed — keeps the overlay hidden during
+// the brief async window so clicks can never leak through to the table.
+function _showLoginOverlay(){
+  const ov=document.getElementById('loginOverlay');
+  if(ov)ov.classList.remove('hidden');
   _renderLoginBox();
+}
+function _initAuth(){
+  // Login overlay starts hidden in HTML — we only reveal it after the
+  // async auto-login flow below has decided that manual login is needed.
   (async function(){
     const params=new URLSearchParams(window.location.search);
     if(params.get('auth')){
@@ -1373,21 +1380,20 @@ function _initAuth(){
       if(_tryAuthLink())return;
     }
     const s=_readPersistedUser();
-    if(s==="guest")guestLogin();
-    else if(s){
+    if(s==="guest"){guestLogin();return;}
+    if(s){
       // For non-guest, USERS may not be populated yet — pull state first
       if(!USERS[s]){
         await _pullRemote();
         if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
       }
-      if(USERS[s]){currentUser={id:s,...USERS[s]};_addKnownAccount(s);showLoggedIn();}
-    } else {
-      // Make sure the picker shows known accounts after we've pulled
-      // remote state (so display names / colors are accurate).
-      try{await _pullRemote();}catch(e){}
-      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
-      _renderLoginBox();
+      if(USERS[s]){currentUser={id:s,...USERS[s]};_addKnownAccount(s);showLoggedIn();return;}
+      // Persisted user exists but USERS lookup failed — fall through to show login
     }
+    // No auto-login → ensure account list is fresh, then reveal the picker
+    try{await _pullRemote();}catch(e){}
+    if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+    _showLoginOverlay();
   })();
 }
 
