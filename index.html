@@ -793,7 +793,7 @@
   <div class="shot-panel" style="max-width:1000px;width:95vw">
     <div class="shot-header">
       <span class="shot-header-id">✅ Done Shots</span>
-      <span class="shot-header-desc" id="doneShotsLegend" style="font-size:11px"><span style="color:#3fb950">● done+file</span> &nbsp; <span style="color:#d29922">● file, status≠done</span> &nbsp; <span style="color:#f85149">● done, no file</span></span>
+      <span class="shot-header-desc" id="doneShotsLegend" style="font-size:11px"><span style="color:#f85149">● done, no file</span> &nbsp; <span style="color:#d29922">● file, status≠done</span> &nbsp; <span style="color:#3fb950">● done+file</span> &nbsp; <span style="color:#6e7681">● delivered to client</span></span>
       <button class="shot-close" onclick="closeDoneShots()">&times;</button>
     </div>
     <div style="display:flex;max-height:70vh;border-top:1px solid #21262d">
@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0065</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0066</div>
 
 <script>
 const USERS = {
@@ -2410,6 +2410,66 @@ async function _pingArtistFinalRequest(shotId){
   }catch(e){
     console.error("Final request push failed:",e);
     alert("Push failed: "+(e.message||e));
+  }
+}
+// Batch ping: groups selected red shots by assigned artist and sends ONE
+// final-request to each artist with the full list of their shots.
+async function _pingArtistFinalRequestBatch(){
+  if(!isAdmin())return;
+  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+    alert("Your account has no link token. Ask admin to regenerate.");return;
+  }
+  // Filter selection to red shots (status=done AND no final file)
+  const reds=[..._fileSelection].filter(sid=>{
+    const arr=(state[sid]?.files?.['versions/final'])||[];
+    return arr.length===0&&getStatus(sid)==='done';
+  });
+  if(!reds.length){alert('No red shots in selection');return;}
+  // Group by assigned artist
+  const byArtist={};
+  const orphans=[];
+  for(const sid of reds){
+    const a=getAssignee(sid);
+    if(!a){orphans.push(sid);continue;}
+    if(!byArtist[a])byArtist[a]=[];
+    byArtist[a].push(sid);
+  }
+  if(!Object.keys(byArtist).length){alert('None of the selected shots have an assignee');return;}
+  // Confirm + optional comment
+  const summary=Object.entries(byArtist).map(([a,ids])=>`${a}: ${ids.join(', ')}`).join('\n')+(orphans.length?'\n\nSkipped (no assignee): '+orphans.join(', '):'');
+  const comment=await _showPushPrompt("Batch ping artists",summary);
+  if(comment===null)return;
+  if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
+  const fromUser=currentUser.display||currentUser.id;
+  let sent=0,failed=0;
+  for(const[artistId,ids] of Object.entries(byArtist)){
+    try{
+      const r=await fetch(TG_PUSH_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          kind:"final_request",
+          shotId:ids[0],
+          shotIds:ids,
+          shotDesc:'',
+          artistId,
+          comment,
+          fromUser,
+          userId:currentUser.id,
+          linkToken:state.__users[currentUser.id].linkToken
+        })
+      });
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok||!data.ok)throw new Error(data.error||('HTTP '+r.status));
+      sent++;
+    }catch(e){
+      console.error('Batch ping failed for',artistId,e);
+      failed++;
+    }
+  }
+  _lastPushAt=Date.now();
+  if(typeof _showAlert==='function'){
+    _showAlert('Batch sent',`${sent} artist${sent!==1?'s':''} notified${failed?', '+failed+' failed':''}${orphans.length?', '+orphans.length+' skipped (no assignee)':''}`);
   }
 }
 function _doneShareSelected(){
@@ -5968,15 +6028,43 @@ function _getFilesRoot(id){
   // Done Shots: admin-only — shots that are done OR have a final file
   if(id==='__doneshots'){
     const result=[];
+    // Helper: a shot is "delivered" once at least one Telegram visitor that
+    // came via a CLIENT-CHAT push (not the internal test target) has marked
+    // every versions/final file as completed in /tg/track.
+    const _isDelivered=(shotId)=>{
+      const tracking=state.__downloadTracking||{};
+      const shares=state.__downloadShares||{};
+      const finalNames=((state[shotId]?.files?.['versions/final'])||[]).map(f=>shotId+'_FINAL/'+f.name);
+      if(!finalNames.length)return false;
+      for(const[token,share] of Object.entries(shares)){
+        if(!share||!Array.isArray(share.ids)||!share.ids.includes(shotId))continue;
+        // Only client-chat pushes count. 'pushedTo' is added by the worker
+        // on each client-chat push; 'internal' marks the test target.
+        const pushedTo=share.pushedTo||[];
+        const hasClientPush=pushedTo.some(t=>t&&t!=='internal');
+        if(!hasClientPush)continue;
+        const node=tracking[token];
+        if(!node||!node.users)continue;
+        for(const[uid,u] of Object.entries(node.users)){
+          if(uid==='_anon')continue;
+          const uf=u.files||{};
+          const allDone=finalNames.every(fn=>uf[fn]&&uf[fn].state==='completed');
+          if(allDone)return true;
+        }
+      }
+      return false;
+    };
     for(const t of TASKS){
       const finalArr=(state[t.id]?.files?.['versions/final'])||[];
       const hasFinal=finalArr.length>0;
       const isDone=getStatus(t.id)==='done';
       if(!hasFinal&&!isDone)continue;
-      let colorTag;
-      if(hasFinal&&isDone)colorTag='#3fb950';        // green: both
-      else if(hasFinal&&!isDone)colorTag='#d29922';  // yellow: file but not done
-      else colorTag='#f85149';                       // red: done but no file
+      let colorTag,priority;
+      const delivered=_isDelivered(t.id);
+      if(delivered){colorTag='#6e7681';priority=4;}        // grey: client got it
+      else if(hasFinal&&!isDone){colorTag='#d29922';priority=2;} // yellow
+      else if(hasFinal&&isDone){colorTag='#3fb950';priority=3;}  // green
+      else {colorTag='#f85149';priority=1;}                       // red (done, no file)
       const children=finalArr.map(f=>({
         name:f.name,
         size:_formatSize(f.size),
@@ -5984,8 +6072,16 @@ function _getFilesRoot(id){
         date:f.date||'—',
         url:CDN_BASE+'/'+f.r2key
       }));
-      result.push({name:t.id,displayName:t.id+'_FINAL',type:'folder',locked:false,children,colorTag});
+      result.push({name:t.id,displayName:t.id+'_FINAL',type:'folder',locked:false,children,colorTag,_priority:priority});
     }
+    // Sort: red (1) → yellow (2) → green (3) → grey (4). Within the grey
+    // bucket sort alphabetically by shot id (the user explicitly asked for
+    // alphabetic order in the delivered group).
+    result.sort((a,b)=>{
+      if(a._priority!==b._priority)return a._priority-b._priority;
+      if(a._priority===4)return a.name.localeCompare(b.name);
+      return 0;
+    });
     return result;
   }
   // Admin files: no locked source/versions folders, just user folders + files
@@ -6141,11 +6237,24 @@ function _updateSelectionUI(id){
     if(_fileSelection.size>0){
       bar.classList.add("active");
       const shareSelBtn=(id==='__doneshots')?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`:'';
+      // Batch ping for red shots: enabled when at least one selected shot
+      // is red (status=done, no final). Groups by assigned artist and
+      // posts one notice per artist topic.
+      let pingBtn='';
+      if(id==='__doneshots'){
+        const reds=[..._fileSelection].filter(sid=>{
+          const arr=(state[sid]?.files?.['versions/final'])||[];
+          return arr.length===0&&getStatus(sid)==='done';
+        });
+        if(reds.length>0){
+          pingBtn=`<button onclick="_pingArtistFinalRequestBatch()" style="background:#f85149;color:#fff;border-color:#f85149">📣 Ping artists (${reds.length})</button>`;
+        }
+      }
       const delBtn=(id==='__doneshots')?'':`<button class="sel-danger" onclick="_deleteSelected('${id}')">Delete</button>`;
       bar.innerHTML=`<span class="sel-count">${_fileSelection.size} selected</span>`+
         `<button onclick="_selectAll('${id}')">Select All</button>`+
         `<button onclick="_clearSelection();_updateSelectionUI('${id}')">Deselect</button>`+
-        shareSelBtn+delBtn;
+        shareSelBtn+pingBtn+delBtn;
     } else {
       bar.classList.remove("active");
       bar.innerHTML='';

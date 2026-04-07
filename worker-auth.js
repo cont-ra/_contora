@@ -286,9 +286,18 @@ async function handleTgPush(request, env) {
       ? `https://t.me/${botUsername}?start=dl_${encodeURIComponent(dlToken)}`
       : safeLink;
     // Make sure the tracking record exists so the share is visible in the
-    // admin sidebar even before any visitor arrives.
+    // admin sidebar even before any visitor arrives. Also record WHERE the
+    // share was pushed — the client uses this to mark a shot as "delivered"
+    // only when a real client chat received it (internal test pushes don't
+    // count toward delivery).
     if (dlToken) {
       _ensureTrackingNode(stateData, dlToken);
+      if (stateData.__downloadShares && stateData.__downloadShares[dlToken]) {
+        const node = stateData.__downloadShares[dlToken];
+        if (!Array.isArray(node.pushedTo)) node.pushedTo = [];
+        const target = internalTarget ? 'internal' : String(targetChatId);
+        if (!node.pushedTo.includes(target)) node.pushedTo.push(target);
+      }
       await _writeStateData(stateData);
     }
     // Build per-shot summary lines straight from state for THIS share
@@ -329,6 +338,8 @@ async function handleTgPush(request, env) {
   // ── FINAL REQUEST: ping the assigned artist in their topic to say
   // the shot is approved and ready for the final render upload.
   // Admin only. Lands in the artist's thread inside KILLHOUSE _contora.
+  // Supports a batch form: pass shotIds:[...] for one notice that lists
+  // every shot belonging to that artist.
   if (kind === 'final_request') {
     if (!callerIsAdmin) {
       return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
@@ -336,16 +347,32 @@ async function handleTgPush(request, env) {
     if (!artistId) {
       return _jsonResp({ ok: false, error: 'missing_artist' }, 400, origin);
     }
-    const safeShotFr = _escapeHtml(shotId);
     const safeFromFr = _escapeHtml(fromUser || 'admin');
     const safeCommentFr = _escapeHtml((comment || '').slice(0, 500));
-    const trackerLink = `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(shotId)}`;
-    const text =
-      `🎬 <b>${safeShotFr}</b> — <b>APPROVED</b>\n\n` +
-      `✅ Client approved the shot. You can upload the final render.` +
-      (safeCommentFr ? `\n\n📝 ${safeCommentFr}` : '') +
-      `\n\n<i>by ${safeFromFr}</i>`;
-    const reply_markup = { inline_keyboard: [[{ text: '🗂 Open shot', url: trackerLink }]] };
+    const ids = (Array.isArray(body.shotIds) && body.shotIds.length) ? body.shotIds : [shotId];
+    let text;
+    let reply_markup;
+    if (ids.length > 1) {
+      const lines = ids.map(id => `• <b>${_escapeHtml(id)}</b>`).join('\n');
+      text =
+        `🎬 <b>${ids.length} SHOTS APPROVED</b>\n\n` +
+        `✅ Client approved the following shots. You can upload the final renders:\n\n` +
+        lines +
+        (safeCommentFr ? `\n\n📝 ${safeCommentFr}` : '') +
+        `\n\n<i>by ${safeFromFr}</i>`;
+      // Single inline-keyboard: open the first shot in tracker.
+      const trackerLink = `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(ids[0])}`;
+      reply_markup = { inline_keyboard: [[{ text: '🗂 Open tracker', url: trackerLink }]] };
+    } else {
+      const safeShotFr = _escapeHtml(ids[0]);
+      const trackerLink = `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(ids[0])}`;
+      text =
+        `🎬 <b>${safeShotFr}</b> — <b>APPROVED</b>\n\n` +
+        `✅ Client approved the shot. You can upload the final render.` +
+        (safeCommentFr ? `\n\n📝 ${safeCommentFr}` : '') +
+        `\n\n<i>by ${safeFromFr}</i>`;
+      reply_markup = { inline_keyboard: [[{ text: '🗂 Open shot', url: trackerLink }]] };
+    }
     const tgUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
     const tgResp = await fetch(tgUrl, {
       method: 'POST',
