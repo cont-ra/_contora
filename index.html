@@ -730,6 +730,13 @@
   .pub-existing-item .pe-icon { flex-shrink: 0; }
   .pub-existing-item .pe-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d1d9; }
   .pub-existing-item .pe-size { font-family: 'SF Mono', monospace; font-size: 11px; }
+  .pub-file-cb { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #484f58; background: #161b22; cursor: pointer; position: relative; flex-shrink: 0; margin: 0; transition: background 0.15s, border-color 0.15s; }
+  .pub-file-cb::before { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #6e7681; font-size: 13px; font-weight: 700; line-height: 1; transition: color 0.15s; }
+  .pub-file-cb:hover { border-color: #6e7681; background: #1c2128; }
+  .pub-file-cb:hover::before { color: #8b949e; }
+  .pub-file-cb:checked { background: #238636; border-color: #2ea043; }
+  .pub-file-cb:checked::before { color: #fff; }
+  .pub-file-cb:checked:hover { background: #2ea043; }
   .pub-dup-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9000; display: flex; align-items: center; justify-content: center; }
   .pub-dup-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; max-width: 440px; width: 90%; }
   .pub-dup-box h3 { color: #f0f6fc; font-size: 15px; margin-bottom: 8px; }
@@ -950,7 +957,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0049</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0050</div>
 
 <script>
 const USERS = {
@@ -2148,8 +2155,8 @@ function _renderPublicDownload(ids){
       for(let fi=0;fi<g.files.length;fi++){
         const f=g.files[fi];
         const key=gi+'|'+fi;
-        html+=`<div class="pub-existing-item" style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #21262d">
-          <input type="checkbox" class="pub-file-cb" data-key="${esc(key)}" onchange="_pubOnSelect(this)" style="width:16px;height:16px;cursor:pointer;accent-color:#1f6feb">
+        html+=`<div class="pub-existing-item" data-pub-shot="${esc(g.id)}" style="display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid #21262d">
+          <input type="checkbox" class="pub-file-cb" data-key="${esc(key)}" onchange="_pubOnSelect(this)">
           <span class="pe-icon">📄</span>
           <span class="pe-name" style="flex:1;color:#e6edf3">${esc(f.name)}</span>
           <span class="pe-size" style="color:#8b949e;font-size:12px">${_formatSize(f.size)}</span>
@@ -2164,12 +2171,12 @@ function _renderPublicDownload(ids){
   // Stash for download all
   window.__pubDlGroups=groups;
   window.__pubSelected=new Set();
-  // Wire hover preview for shot headings (reuse Done Shots tooltip logic)
-  document.querySelectorAll('h3[data-pub-shot]').forEach(h=>{
-    const shotId=h.dataset.pubShot;
-    h.addEventListener('mouseenter',e=>{_dsHoverShow(shotId,e,'#3fb950');});
-    h.addEventListener('mousemove',e=>{_dsHoverMove(e);});
-    h.addEventListener('mouseleave',()=>{_dsHoverHide();});
+  // Wire hover preview for shot headings AND file rows (reuse Done Shots logic)
+  document.querySelectorAll('[data-pub-shot]').forEach(el=>{
+    const shotId=el.dataset.pubShot;
+    el.addEventListener('mouseenter',e=>{_dsHoverShow(shotId,e,'#3fb950');});
+    el.addEventListener('mousemove',e=>{_dsHoverMove(e);});
+    el.addEventListener('mouseleave',()=>{_dsHoverHide();});
   });
 }
 function _pubOnSelect(cb){
