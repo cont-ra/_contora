@@ -167,14 +167,18 @@ async function handleTgPush(request, env) {
   //  • Pushing to the default group: admin OR the artist assigned to the shot
   //  • Pushing to any other (client) chat: admin only
   //  • Download-share push: admin only AND must use targetChatId
+  //  • '__internal__' is an admin-only escape hatch for download pushes that
+  //    should land in the main KILLHOUSE _contora group's General topic
+  //    (used for internal testing).
   const callerIsAdmin = user.role === 'admin';
   const callerIsAssignee = artistId && user.id === String(artistId).toLowerCase();
-  const usingTargetChat = targetChatId && String(targetChatId) !== String(TG_CHAT_ID);
+  const internalTarget = String(targetChatId || '') === '__internal__';
+  const usingTargetChat = !internalTarget && targetChatId && String(targetChatId) !== String(TG_CHAT_ID);
   if (kind === 'download') {
     if (!callerIsAdmin) {
       return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
     }
-    if (!usingTargetChat) {
+    if (!usingTargetChat && !internalTarget) {
       return _jsonResp({ ok: false, error: 'download_requires_target_chat' }, 400, origin);
     }
   }
@@ -187,14 +191,23 @@ async function handleTgPush(request, env) {
     if (!allowed.includes(String(targetChatId))) {
       return _jsonResp({ ok: false, error: 'chat_not_allowed' }, 403, origin);
     }
+  } else if (internalTarget) {
+    if (!callerIsAdmin) {
+      return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
+    }
   } else if (!callerIsAdmin && !callerIsAssignee) {
     return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
   }
 
   // Resolve the chat & thread to send to
-  const effectiveChatId = usingTargetChat ? String(targetChatId) : TG_CHAT_ID;
+  const effectiveChatId = internalTarget
+    ? TG_CHAT_ID
+    : (usingTargetChat ? String(targetChatId) : TG_CHAT_ID);
   let threadId = null;
-  if (!usingTargetChat) {
+  if (internalTarget) {
+    // Internal test target: post to the General topic (no thread_id).
+    threadId = null;
+  } else if (!usingTargetChat) {
     // Default group is a forum — every push must go into the artist's topic
     threadId = _resolveThread(stateData, artistId);
     if (!threadId) {
