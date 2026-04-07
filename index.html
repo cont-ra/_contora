@@ -960,7 +960,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0064</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0065</div>
 
 <script>
 const USERS = {
@@ -989,7 +989,14 @@ function _addKnownAccount(id){
   // asking for the password (same trust level as a saved auth link).
   const linkToken=state.__users?.[id]?.linkToken||null;
   const list=_readKnownAccounts().filter(a=>a.id!==id);
-  list.unshift({id,display:u.display||id,role:u.role||'artist',color:getUserColor(id)||'#58a6ff',linkToken,lastLogin:Date.now()});
+  // Resolve color carefully: getUserColor / _defaultRoleColors live further
+  // down in the file as `const`, which means they are still in the temporal
+  // dead zone when this function fires from the very-early _initAuth path.
+  // Touching them would throw a ReferenceError, kill the auto-login chain
+  // and leave the page without a user badge / admin gear / Done Shots etc.
+  let color='#58a6ff';
+  try{if(typeof getUserColor==='function')color=getUserColor(id)||color;}catch(e){}
+  list.unshift({id,display:u.display||id,role:u.role||'artist',color,linkToken,lastLogin:Date.now()});
   _writeKnownAccounts(list.slice(0,8));
 }
 function _removeKnownAccount(id){
@@ -1127,7 +1134,7 @@ async function tryLogin(){
 }
 function guestLogin(){currentUser={id:"guest",display:"Guest",role:"guest"};_persistUser("guest");showLoggedIn();}
 document.getElementById("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
-async function showLoggedIn(){try{localStorage.setItem('__dbg_showLoggedIn',JSON.stringify({at:Date.now(),user:currentUser?.id,badge:document.getElementById('userBadge')?.style.display,stack:new Error().stack?.substring(0,400)}));}catch(e){}document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
+async function showLoggedIn(){document.getElementById("loginOverlay").classList.add("hidden");document.getElementById("userBadge").style.display="inline-flex";document.getElementById("userName").textContent=currentUser.display;document.getElementById("userDot").className="dot dot-"+currentUser.id;
   // Pull latest data from remote
   const pulled=await _pullRemote();if(pulled){runMigrations();if(state.__users){for(const[id,u]of Object.entries(state.__users)){USERS[id]=u;}}}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
@@ -1372,28 +1379,41 @@ function _showLoginOverlay(){
 function _initAuth(){
   // Login overlay starts hidden in HTML — we only reveal it after the
   // async auto-login flow below has decided that manual login is needed.
+  // Wrapped in a single try/catch so any TDZ access (this function runs
+  // very early in script init, while many top-level `const` bindings are
+  // still uninitialised) cannot kill the auto-login chain silently.
   (async function(){
-    const params=new URLSearchParams(window.location.search);
-    if(params.get('auth')){
-      await _pullRemote();
-      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
-      if(_tryAuthLink())return;
-    }
-    const s=_readPersistedUser();
-    if(s==="guest"){guestLogin();return;}
-    if(s){
-      // For non-guest, USERS may not be populated yet — pull state first
-      if(!USERS[s]){
+    try{
+      const params=new URLSearchParams(window.location.search);
+      if(params.get('auth')){
         await _pullRemote();
         if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+        if(_tryAuthLink())return;
       }
-      if(USERS[s]){currentUser={id:s,...USERS[s]};_addKnownAccount(s);showLoggedIn();return;}
-      // Persisted user exists but USERS lookup failed — fall through to show login
+      const s=_readPersistedUser();
+      if(s==="guest"){guestLogin();return;}
+      if(s){
+        // For non-guest, USERS may not be populated yet — pull state first
+        if(!USERS[s]){
+          await _pullRemote();
+          if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+        }
+        if(USERS[s]){
+          currentUser={id:s,...USERS[s]};
+          try{_addKnownAccount(s);}catch(e){console.warn('addKnownAccount failed:',e);}
+          showLoggedIn();
+          return;
+        }
+        // Persisted user exists but USERS lookup failed — fall through to show login
+      }
+      // No auto-login → ensure account list is fresh, then reveal the picker
+      try{await _pullRemote();}catch(e){}
+      if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
+      _showLoginOverlay();
+    }catch(e){
+      console.error('initAuth crashed:',e);
+      _showLoginOverlay();
     }
-    // No auto-login → ensure account list is fresh, then reveal the picker
-    try{await _pullRemote();}catch(e){}
-    if(state.__users){for(const[id,u] of Object.entries(state.__users)){USERS[id]=u;}}
-    _showLoginOverlay();
   })();
 }
 
