@@ -299,7 +299,12 @@ async function handleTgPush(request, env) {
     const shareIds = (share && share.ids) || [];
     const summaryLines = _buildShotSummaryLines(stateData, shareIds);
     const safeComment = _escapeHtml((comment || '').slice(0, 500));
+    // Header makes it clear to the client what they're looking at: the
+    // material is the final, admin-approved cut.
+    const downloadHeader = '✅ <b>FINAL MATERIALS — approved</b>';
     const text =
+      downloadHeader +
+      '\n\n' +
       (summaryLines.length ? summaryLines.join('\n') : '<i>(no shots)</i>') +
       (safeComment ? '\n\n📝 ' + safeComment : '');
     const reply_markup = { inline_keyboard: [[{ text: '⬇ Download', url: buttonUrl }]] };
