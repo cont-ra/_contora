@@ -950,7 +950,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0046</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0047</div>
 
 <script>
 const USERS = {
@@ -2089,7 +2089,10 @@ function _doneShareSelected(){
 }
 
 // === PUBLIC DOWNLOAD PAGE ===
-let _pubDownloadMode=false;
+// var (not let): boot at ~1626 calls _checkPublicDownload before this line
+// is reached. let would TDZ-throw and silently kill the boot, leaving the
+// login overlay visible.
+var _pubDownloadMode=false;
 function _checkPublicDownload(){
   const params=new URLSearchParams(window.location.search);
   const token=params.get('download');
