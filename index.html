@@ -950,7 +950,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0048</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0049</div>
 
 <script>
 const USERS = {
@@ -2132,16 +2132,24 @@ function _renderPublicDownload(ids){
   let html=`<div class="pub-upload-wrap"><h2>📥 KILLHOUSE VFX — Download</h2>`;
   html+=`<div style="color:#8b949e;font-size:13px;margin:8px 0 16px">${groups.length} shot${groups.length!==1?'s':''} · ${totalFiles} file${totalFiles!==1?'s':''} · ${_formatSize(totalBytes)}</div>`;
   if(totalFiles>0){
+    html+=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">`;
     html+=`<button class="files-btn" id="pubDlAllBtn" onclick="_pubDownloadAll()" style="background:#238636;color:#fff;border:1px solid #2ea043;padding:10px 18px;font-size:14px;cursor:pointer;border-radius:6px;font-weight:600">⬇ Download All as ZIP (${_formatSize(totalBytes)})</button>`;
+    html+=`<button class="files-btn" id="pubDlSelBtn" onclick="_pubDownloadSelected()" style="display:none;background:#1f6feb;color:#fff;border:1px solid #1f6feb;padding:10px 18px;font-size:14px;cursor:pointer;border-radius:6px;font-weight:600">⬇ Download Selected (0)</button>`;
+    html+=`<button class="files-btn" id="pubSelAllBtn" onclick="_pubToggleSelectAll()" style="background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:8px 14px;font-size:12px;cursor:pointer;border-radius:6px">Select All</button>`;
+    html+=`</div>`;
     html+=`<div id="pubDlProgress" style="margin-top:10px;color:#8b949e;font-size:12px"></div>`;
   }
-  for(const g of groups){
-    html+=`<div class="pub-existing" style="margin-top:24px"><h3 style="color:#3fb950;margin-bottom:8px">📁 ${esc(g.id)}_FINAL</h3>`;
+  for(let gi=0;gi<groups.length;gi++){
+    const g=groups[gi];
+    html+=`<div class="pub-existing" style="margin-top:24px"><h3 data-pub-shot="${esc(g.id)}" style="color:#3fb950;margin-bottom:8px;cursor:default;display:inline-block">📁 ${esc(g.id)}_FINAL</h3>`;
     if(!g.files.length){
       html+=`<div style="color:#484f58;font-size:12px;padding:8px">No files</div>`;
     } else {
-      for(const f of g.files){
+      for(let fi=0;fi<g.files.length;fi++){
+        const f=g.files[fi];
+        const key=gi+'|'+fi;
         html+=`<div class="pub-existing-item" style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #21262d">
+          <input type="checkbox" class="pub-file-cb" data-key="${esc(key)}" onchange="_pubOnSelect(this)" style="width:16px;height:16px;cursor:pointer;accent-color:#1f6feb">
           <span class="pe-icon">📄</span>
           <span class="pe-name" style="flex:1;color:#e6edf3">${esc(f.name)}</span>
           <span class="pe-size" style="color:#8b949e;font-size:12px">${_formatSize(f.size)}</span>
@@ -2155,6 +2163,65 @@ function _renderPublicDownload(ids){
   document.body.insertAdjacentHTML('beforeend',html);
   // Stash for download all
   window.__pubDlGroups=groups;
+  window.__pubSelected=new Set();
+  // Wire hover preview for shot headings (reuse Done Shots tooltip logic)
+  document.querySelectorAll('h3[data-pub-shot]').forEach(h=>{
+    const shotId=h.dataset.pubShot;
+    h.addEventListener('mouseenter',e=>{_dsHoverShow(shotId,e,'#3fb950');});
+    h.addEventListener('mousemove',e=>{_dsHoverMove(e);});
+    h.addEventListener('mouseleave',()=>{_dsHoverHide();});
+  });
+}
+function _pubOnSelect(cb){
+  const key=cb.dataset.key;
+  if(!window.__pubSelected)window.__pubSelected=new Set();
+  if(cb.checked)window.__pubSelected.add(key);
+  else window.__pubSelected.delete(key);
+  _pubUpdateSelUI();
+}
+function _pubUpdateSelUI(){
+  const n=window.__pubSelected?.size||0;
+  const btn=document.getElementById('pubDlSelBtn');
+  if(btn){
+    btn.style.display=n>0?'inline-block':'none';
+    btn.textContent='⬇ Download Selected ('+n+')';
+  }
+  // Update Select All label
+  const all=document.querySelectorAll('.pub-file-cb');
+  const allBtn=document.getElementById('pubSelAllBtn');
+  if(allBtn)allBtn.textContent=(n===all.length&&n>0)?'Deselect All':'Select All';
+}
+function _pubToggleSelectAll(){
+  const cbs=document.querySelectorAll('.pub-file-cb');
+  if(!window.__pubSelected)window.__pubSelected=new Set();
+  const allOn=window.__pubSelected.size===cbs.length;
+  if(allOn){
+    cbs.forEach(c=>{c.checked=false;});
+    window.__pubSelected.clear();
+  } else {
+    cbs.forEach(c=>{c.checked=true;window.__pubSelected.add(c.dataset.key);});
+  }
+  _pubUpdateSelUI();
+}
+async function _pubDownloadSelected(){
+  const groups=window.__pubDlGroups||[];
+  const sel=window.__pubSelected||new Set();
+  if(!sel.size)return;
+  const files=[];
+  for(const key of sel){
+    const[gi,fi]=key.split('|').map(Number);
+    const g=groups[gi];const f=g?.files[fi];
+    if(g&&f)files.push({url:f.url,path:g.id+'_FINAL/'+f.name});
+  }
+  if(!files.length)return;
+  const btn=document.getElementById('pubDlSelBtn');
+  if(btn){btn.disabled=true;btn.textContent='Preparing ZIP...';}
+  try{
+    await _downloadAsZip(files,'killhouse_selected');
+    if(btn){btn.textContent='✓ Done — saved to disk';btn.disabled=false;setTimeout(()=>{btn.textContent='⬇ Download Selected ('+(window.__pubSelected?.size||0)+')';},2500);}
+  }catch(e){
+    if(btn){btn.textContent='Failed — retry';btn.disabled=false;}
+  }
 }
 async function _pubDownloadAll(){
   const groups=window.__pubDlGroups||[];
