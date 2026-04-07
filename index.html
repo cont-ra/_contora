@@ -554,6 +554,12 @@
   .chat-sel-bar { padding: 6px 8px; justify-content: center; }
   .chat-files-body .files-drop { padding: 16px; font-size: 11px; min-height: 40px; }
   .chat-files-body .f-grip { font-size: 14px; width: 18px; padding-right: 4px; }
+  .ds-hover-preview { position: fixed; z-index: 10000; background: #0d1117; border: 1px solid #3fb950; border-radius: 8px; padding: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); pointer-events: none; opacity: 0; transition: opacity 0.15s ease-out; }
+  .ds-hover-preview.visible { opacity: 1; }
+  .ds-hover-preview video { display: block; width: 320px; height: 180px; object-fit: cover; border-radius: 4px; background: #000; }
+  .ds-hover-preview .dshp-label { position: absolute; top: 10px; left: 10px; right: 10px; color: #fff; font-size: 11px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.9); display: flex; justify-content: space-between; pointer-events: none; }
+  .ds-hover-preview .dshp-label .dshp-id { color: #3fb950; }
+  .ds-hover-preview .dshp-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8b949e; font-size: 11px; }
   .cf-tip { position: fixed; z-index: 9999; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c9d1d9; pointer-events: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5); overflow: hidden; }
   .cf-tip .cft-icon { flex-shrink: 0; }
   .cf-tip .cft-name { overflow: hidden; text-overflow: ellipsis; }
@@ -776,6 +782,16 @@
     <div id="myFilesBody" style="padding:16px;max-height:70vh;overflow:auto"></div>
   </div>
 </div>
+<div class="shot-overlay hidden" id="doneShotsOverlay" onclick="if(event.target===this)closeDoneShots()">
+  <div class="shot-panel" style="max-width:700px;width:90vw">
+    <div class="shot-header">
+      <span class="shot-header-id">✅ Done Shots</span>
+      <span class="shot-header-desc" id="doneShotsLegend" style="font-size:11px"><span style="color:#3fb950">● done+file</span> &nbsp; <span style="color:#d29922">● file, status≠done</span> &nbsp; <span style="color:#f85149">● done, no file</span></span>
+      <button class="shot-close" onclick="closeDoneShots()">&times;</button>
+    </div>
+    <div id="doneShotsBody" style="padding:16px;max-height:70vh;overflow:auto"></div>
+  </div>
+</div>
 <div class="shot-overlay hidden" id="shotOverlay" onclick="if(event.target===this)closeShot()">
   <div class="shot-panel">
     <div class="shot-header">
@@ -893,7 +909,8 @@
     <span class="logout-link" onclick="logout()">logout</span>
   </div>
   <button class="admin-gear" id="adminGear" onclick="toggleAdminMenu()" style="display:none" title="Admin menu">⚙</button>
-  <button id="myFilesBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto" onclick="openMyFiles()">📁 My Files</button>
+  <button id="doneShotsBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto;margin-right:8px" onclick="openDoneShots()">✅ Done Shots</button>
+  <button id="myFilesBtn" style="display:none;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600" onclick="openMyFiles()">📁 My Files</button>
 </div>
 <p class="subtitle">Declined tasks (Coffeepost) — 28 shots to review</p>
 
@@ -931,7 +948,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0043</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0044</div>
 
 <script>
 const USERS = {
@@ -1103,6 +1120,8 @@ async function showLoggedIn(){document.getElementById("loginOverlay").classList.
   _initGifs();
   const mfb=document.getElementById("myFilesBtn");
   if(mfb)mfb.style.display=isGuest()?'none':'block';
+  const dsb=document.getElementById("doneShotsBtn");
+  if(dsb)dsb.style.display=isAdmin()?'block':'none';
   render();
   _handleChatDeepLink();
   _handlePlayerDeepLink();
@@ -1597,7 +1616,7 @@ function _checkMobilePlayerRedirect(){
   })();
   return true;
 }
-if(!_checkMobilePlayerRedirect()&&!_checkPublicUpload()) _initAuth();
+if(!_checkMobilePlayerRedirect()&&!_checkPublicUpload()&&!_checkPublicDownload()) _initAuth();
 
 let currentFilter="all",artistFilter="all",searchQuery="",sortCol=-1,sortAsc=true;
 
@@ -1780,6 +1799,20 @@ function closeMyFiles(){
   document.getElementById("myFilesOverlay").classList.add("hidden");
   _myFilesMode=false;
   _myFilesShotId=null;
+}
+let _doneShotsMode=false;
+function openDoneShots(){
+  if(!isAdmin())return;
+  _doneShotsMode=true;
+  _filesPath=[];
+  _shotCurrentId='__doneshots';
+  document.getElementById("doneShotsOverlay").classList.remove("hidden");
+  _renderShotFiles('__doneshots');
+}
+function closeDoneShots(){
+  document.getElementById("doneShotsOverlay").classList.add("hidden");
+  _doneShotsMode=false;
+  if(typeof _dsHoverHide==='function')_dsHoverHide();
 }
 function openAddShotDialog(){
   if(!isEditMode()||!isAdmin())return;
@@ -1983,6 +2016,149 @@ function _afRevokeShare(fullPath){
   saveState(state);
   document.getElementById("afShareOverlay")?.remove();
   _renderShotFiles('__admin');
+}
+
+// === DONE SHOTS — share download links ===
+function _genShareToken(){
+  return Math.random().toString(36).substr(2,10)+Math.random().toString(36).substr(2,10);
+}
+function _ensureDownloadShares(){
+  if(!state.__downloadShares)state.__downloadShares={};
+}
+function _findExistingDownloadShare(ids){
+  _ensureDownloadShares();
+  const key=[...ids].sort().join(',');
+  for(const[token,info] of Object.entries(state.__downloadShares)){
+    if([...(info.ids||[])].sort().join(',')===key)return token;
+  }
+  return null;
+}
+function _createDownloadShare(ids){
+  _ensureDownloadShares();
+  const existing=_findExistingDownloadShare(ids);
+  if(existing)return existing;
+  const token=_genShareToken();
+  state.__downloadShares[token]={ids:[...ids],created:Date.now(),createdBy:currentUser?.id||''};
+  saveState(state);
+  return token;
+}
+function _shareDownloadLink(ids,title){
+  if(!isAdmin())return;
+  if(!ids.length)return;
+  const token=_createDownloadShare(ids);
+  const prodBase=location.hostname.includes('localhost')?location.origin+location.pathname:'https://spark700.github.io/kh-vfx-tracker/';
+  const url=prodBase+'?download='+token;
+  const ov=document.createElement("div");
+  ov.className="confirm-overlay";ov.id="dlShareOverlay";
+  const list=ids.map(i=>'• '+esc(i)).join('<br>');
+  ov.innerHTML=`<div class="confirm-box" style="text-align:left;max-width:520px"><div class="confirm-title" style="color:#3fb950">📥 Download Share Link</div><div class="confirm-msg" style="text-align:left">${esc(title)}<br><span style="font-size:11px;color:#8b949e">${list}</span><br><br><span style="font-size:11px;color:#484f58">Anyone with this link can download these files.</span></div><div class="af-share-row"><code id="dlShareUrl">${esc(url)}</code><button id="dlCopyBtn" onclick="_dlCopyShareLink()">Copy</button></div><div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="confirm-btn cancel" onclick="_dlRevokeShare('${esc(token)}')">Revoke</button><button class="confirm-btn cancel" onclick="document.getElementById('dlShareOverlay').remove()">Close</button></div></div>`;
+  document.body.appendChild(ov);
+}
+function _dlCopyShareLink(){
+  const url=document.getElementById("dlShareUrl")?.textContent;
+  if(!url)return;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.getElementById("dlCopyBtn");
+    if(btn){btn.textContent="Copied!";btn.classList.add("copied");setTimeout(()=>{btn.textContent="Copy";btn.classList.remove("copied");},2000);}
+  });
+}
+function _dlRevokeShare(token){
+  _ensureDownloadShares();
+  delete state.__downloadShares[token];
+  saveState(state);
+  document.getElementById("dlShareOverlay")?.remove();
+}
+function _doneShareFolder(shotId){
+  _shareDownloadLink([shotId],'Final files for shot:');
+}
+function _doneShareSelected(){
+  // Only green shots: status=done AND has final files
+  const sel=[..._fileSelection].filter(id=>{
+    const arr=(state[id]?.files?.['versions/final'])||[];
+    return arr.length>0&&getStatus(id)==='done';
+  });
+  if(!sel.length){_showAlert?.('No shareable shots','Only green (done + has final file) shots can be shared.');return;}
+  _shareDownloadLink(sel,sel.length+' shots selected:');
+}
+
+// === PUBLIC DOWNLOAD PAGE ===
+let _pubDownloadMode=false;
+function _checkPublicDownload(){
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('download');
+  if(!token)return false;
+  _pubDownloadMode=true;
+  currentUser={id:"guest",display:"Guest",role:"guest"};
+  document.querySelectorAll('body > *:not(script):not(link)').forEach(el=>el.style.display='none');
+  _initPublicDownload(token);
+  return true;
+}
+async function _initPublicDownload(token){
+  await _pullRemote();
+  const shares=state.__downloadShares||{};
+  const info=shares[token];
+  if(!info||!info.ids||!info.ids.length){_showPubError('Invalid or expired link');return;}
+  _renderPublicDownload(info.ids);
+}
+function _renderPublicDownload(ids){
+  // Build per-shot file list
+  const groups=ids.map(id=>{
+    const files=((state[id]?.files?.['versions/final'])||[]).map(f=>({
+      name:f.name,
+      size:f.size||0,
+      url:CDN_BASE+'/'+f.r2key,
+      r2key:f.r2key
+    }));
+    return {id,files};
+  });
+  let totalFiles=0,totalBytes=0;
+  groups.forEach(g=>{g.files.forEach(f=>{totalFiles++;totalBytes+=f.size||0;});});
+  let html=`<div class="pub-upload-wrap"><h2>📥 KILLHOUSE VFX — Download</h2>`;
+  html+=`<div style="color:#8b949e;font-size:13px;margin:8px 0 16px">${groups.length} shot${groups.length!==1?'s':''} · ${totalFiles} file${totalFiles!==1?'s':''} · ${_formatSize(totalBytes)}</div>`;
+  if(totalFiles>0){
+    html+=`<button class="files-btn" id="pubDlAllBtn" onclick="_pubDownloadAll()" style="background:#238636;color:#fff;border:1px solid #2ea043;padding:10px 18px;font-size:14px;cursor:pointer;border-radius:6px;font-weight:600">⬇ Download All as ZIP (${_formatSize(totalBytes)})</button>`;
+    html+=`<div id="pubDlProgress" style="margin-top:10px;color:#8b949e;font-size:12px"></div>`;
+  }
+  for(const g of groups){
+    html+=`<div class="pub-existing" style="margin-top:24px"><h3 style="color:#3fb950;margin-bottom:8px">📁 ${esc(g.id)}_FINAL</h3>`;
+    if(!g.files.length){
+      html+=`<div style="color:#484f58;font-size:12px;padding:8px">No files</div>`;
+    } else {
+      for(const f of g.files){
+        html+=`<div class="pub-existing-item" style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #21262d">
+          <span class="pe-icon">📄</span>
+          <span class="pe-name" style="flex:1;color:#e6edf3">${esc(f.name)}</span>
+          <span class="pe-size" style="color:#8b949e;font-size:12px">${_formatSize(f.size)}</span>
+          <a class="files-btn" href="${esc(f.url)}" download="${esc(f.name)}" target="_blank" style="background:#21262d;border:1px solid #30363d;padding:4px 10px;border-radius:4px;color:#58a6ff;text-decoration:none;font-size:12px">⬇ Download</a>
+        </div>`;
+      }
+    }
+    html+=`</div>`;
+  }
+  html+=`</div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  // Stash for download all
+  window.__pubDlGroups=groups;
+}
+async function _pubDownloadAll(){
+  const groups=window.__pubDlGroups||[];
+  const files=[];
+  for(const g of groups){
+    for(const f of g.files){
+      files.push({url:f.url,path:g.id+'_FINAL/'+f.name});
+    }
+  }
+  if(!files.length)return;
+  const btn=document.getElementById("pubDlAllBtn");
+  if(btn){btn.disabled=true;btn.textContent='Preparing ZIP...';}
+  const prog=document.getElementById("pubDlProgress");
+  try{
+    await _downloadAsZip(files,'killhouse_download');
+    if(btn){btn.textContent='✓ Done — saved to disk';btn.disabled=false;}
+  }catch(e){
+    if(btn){btn.textContent='Failed — retry';btn.disabled=false;}
+    if(prog)prog.textContent='Error: '+e.message;
+  }
 }
 
 // === PUBLIC UPLOAD PAGE (share link) ===
@@ -4400,7 +4576,7 @@ function saveNote(){
 }
 
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("noteOverlay").classList.contains("hidden"))closeNote();});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!document.getElementById("myFilesOverlay").classList.contains("hidden")){closeMyFiles();return;}if(!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!document.getElementById("doneShotsOverlay").classList.contains("hidden")){closeDoneShots();return;}if(!document.getElementById("myFilesOverlay").classList.contains("hidden")){closeMyFiles();return;}if(!document.getElementById("shotOverlay").classList.contains("hidden"))closeShot();}});
 
 const CDN_BASE="https://pub-5562d3ff4b084ba7824a7ebe61f9466a.r2.dev";
 const GIFS=new Set();
@@ -5118,7 +5294,7 @@ function trunc(s,n){return !s?"":s.length>n?s.substring(0,n)+"...":s;}
 
 // --- SHOT DETAIL ---
 let _shotCurrentId=null;
-function _blockGuest(msg){if(isGuest()){alert(msg||"Guests cannot access this feature");return true;}return false;}
+function _blockGuest(msg){if(_pubDownloadMode)return false;if(isGuest()){alert(msg||"Guests cannot access this feature");return true;}return false;}
 function openShot(id){
   _shotCurrentId=id;_shotTab='versions';_filesPath=[];
   document.getElementById("shotTabVersions").classList.add("active");
@@ -5137,6 +5313,7 @@ function openShot(id){
 }
 function _canUpload(id){
   if(id==='__admin')return isAdmin();
+  if(id==='__doneshots')return false;
   const realId=(id==='__myfiles'&&_filesPath.length>0)?_filesPath[0]:id;
   if(realId==='__myfiles')return false;
   const sk=_getCurrentStateKey();
@@ -5145,6 +5322,7 @@ function _canUpload(id){
 }
 function _canDeleteFile(id){
   if(id==='__admin')return isAdmin();
+  if(id==='__doneshots')return false;
   const realId=(id==='__myfiles'&&_filesPath.length>0)?_filesPath[0]:id;
   if(realId==='__myfiles')return false;
   const sk=_getCurrentStateKey();
@@ -5331,6 +5509,29 @@ function _getFilesRoot(id){
       return {name:t.id,type:'folder',locked:false,children};
     });
   }
+  // Done Shots: admin-only — shots that are done OR have a final file
+  if(id==='__doneshots'){
+    const result=[];
+    for(const t of TASKS){
+      const finalArr=(state[t.id]?.files?.['versions/final'])||[];
+      const hasFinal=finalArr.length>0;
+      const isDone=getStatus(t.id)==='done';
+      if(!hasFinal&&!isDone)continue;
+      let colorTag;
+      if(hasFinal&&isDone)colorTag='#3fb950';        // green: both
+      else if(hasFinal&&!isDone)colorTag='#d29922';  // yellow: file but not done
+      else colorTag='#f85149';                       // red: done but no file
+      const children=finalArr.map(f=>({
+        name:f.name,
+        size:_formatSize(f.size),
+        _bytes:f.size||0,
+        date:f.date||'—',
+        url:CDN_BASE+'/'+f.r2key
+      }));
+      result.push({name:t.id,displayName:t.id+'_FINAL',type:'folder',locked:false,children,colorTag});
+    }
+    return result;
+  }
   // Admin files: no locked source/versions folders, just user folders + files
   if(id==='__admin'){
     _ensureAdminState();
@@ -5442,7 +5643,7 @@ function _formatSize(bytes){
 }
 function _resolveFilesPath(id){
   let items=_getFilesRoot(id);
-  let breadcrumb=id==='__admin'?'admin':(id==='__myfiles'?'My Files':id);
+  let breadcrumb=id==='__admin'?'admin':(id==='__myfiles'?'My Files':(id==='__doneshots'?'Done Shots':id));
   let currentFolder=null;
   for(const p of _filesPath){
     const folder=items.find(f=>f.name===p&&f.type==='folder');
@@ -5483,10 +5684,12 @@ function _updateSelectionUI(id){
   if(bar){
     if(_fileSelection.size>0){
       bar.classList.add("active");
+      const shareSelBtn=(id==='__doneshots')?`<button onclick="_doneShareSelected()" style="background:#1f6feb;color:#fff;border-color:#1f6feb">🔗 Share Link</button>`:'';
+      const delBtn=(id==='__doneshots')?'':`<button class="sel-danger" onclick="_deleteSelected('${id}')">Delete</button>`;
       bar.innerHTML=`<span class="sel-count">${_fileSelection.size} selected</span>`+
         `<button onclick="_selectAll('${id}')">Select All</button>`+
         `<button onclick="_clearSelection();_updateSelectionUI('${id}')">Deselect</button>`+
-        `<button class="sel-danger" onclick="_deleteSelected('${id}')">Delete</button>`;
+        shareSelBtn+delBtn;
     } else {
       bar.classList.remove("active");
       bar.innerHTML='';
@@ -5795,8 +5998,8 @@ function _buildFileTip(id,name,size,editCell,date,icon){
 }
 let _chatFileMode=false;
 function _renderShotFiles(id,overrideBody){
-  _clearSelection();_removeCfTip();
-  const body=overrideBody||(id==='__myfiles'?document.getElementById("myFilesBody"):null)||(_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody"));
+  _clearSelection();_removeCfTip();if(typeof _dsHoverHide==='function')_dsHoverHide();
+  const body=overrideBody||(id==='__myfiles'?document.getElementById("myFilesBody"):null)||(id==='__doneshots'?document.getElementById("doneShotsBody"):null)||(_chatFileMode?document.getElementById("chatFilesBody"):document.getElementById("shotBody"));
   const {items,breadcrumb,currentFolder}=_resolveFilesPath(id);
   // Check if current folder or any ancestor in path is locked
   let isLocked=currentFolder?.locked||false;
@@ -5840,7 +6043,7 @@ function _renderShotFiles(id,overrideBody){
       if(f.locked)lastWasLocked=true;
       const lock=f.locked?` 🔒`:'';
       const delBtn=(!f.locked&&_canUpload(id))?`<button class="f-dl" onclick="event.stopPropagation();_deleteFolder('${id}','${esc(f.name)}')" title="Delete folder">🗑</button>`:'';
-      const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:'';
+      const shareBtn=(id==='__admin'&&!f.locked)?`<button class="f-dl" onclick="event.stopPropagation();_adminShareFolder('${esc(f.name)}')" title="Share link">${f.hasShare?'🔗':'🔗'}</button>`:((id==='__doneshots'&&f.colorTag==='#3fb950')?`<button class="f-dl" onclick="event.stopPropagation();_doneShareFolder('${esc(f.name)}')" title="Share download link">🔗</button>`:'');
       const editCell=id==='__admin'?'':_renderEditCell(id,f.name);
       const dropAttr=!f.locked?` data-drop-folder="${esc(f.name)}"`:` data-locked-folder="1"`;
       const selAttr=` data-sel-name="${esc(f.name)}" class="f-selectable${_fileSelection.has(f.name)?' f-selected':''}"`;
@@ -5852,13 +6055,16 @@ function _renderShotFiles(id,overrideBody){
       const folderBytes=_sumBytes(f.children||[]);
       const folderSize=folderBytes?_formatSize(folderBytes):'';
       const folderTip=_buildFileTip(id,f.name,folderSize,fileCount?fileCount+' files':'','','📁');
-      html+=`<tr${dropAttr}${selAttr}${folderTip}>
-        <td class="f-name" data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${esc(f.name)}${lock}${shareIcon}</td>
+      const colorStyle=f.colorTag?` style="color:${f.colorTag}"`:'';
+      const dsHoverAttr=(id==='__doneshots'&&_filesPath.length===0)?` data-ds-shot="${esc(f.name)}" data-ds-color="${esc(f.colorTag||'#3fb950')}"`:'';
+      const displayLabel=esc(f.displayName||f.name);
+      html+=`<tr${dropAttr}${selAttr}${folderTip}${dsHoverAttr}>
+        <td class="f-name"${colorStyle} data-nav-folder="${esc(f.name)}">${grip}<span class="f-icon">📁</span>${displayLabel}${lock}${shareIcon}</td>
         <td class="f-size">${fileCount||''}</td>
         <td class="f-size">${folderSize}</td>
         <td class="f-edit">${editCell}</td>
         <td class="f-date"></td>
-        <td class="f-actions">${shareBtn}${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>${delBtn}</td>
+        <td class="f-actions">${shareBtn}${_chatFileMode?`<button class="f-dl f-share-stub" onclick="event.stopPropagation()" title="Share (coming soon)">🔗</button>`:''}${(id==='__doneshots'&&f.colorTag!=='#3fb950')?'':`<button class="f-dl" onclick="event.stopPropagation();_downloadFolderByName('${id}','${esc(f.name)}')" title="Download folder"><svg class="dl-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>`}${delBtn}</td>
       </tr>`;
     } else {
       if(lastWasLocked){html+=`<tr class="f-locked-sep"><td colspan="6"><hr></td></tr>`;lastWasLocked=false;}
@@ -6121,6 +6327,8 @@ function _renderShotFiles(id,overrideBody){
   if(_uploadQueue.shotId===id&&_uploadQueue.items.length)_renderUploadQueue();
   // Chat files: hover tooltip
   _setupChatFileTips(body);
+  // Done Shots: video hover preview above cursor
+  if(id==='__doneshots')_setupDoneShotsHoverPreview(body);
 }
 let _cfTipEl=null;
 function _setupChatFileTips(container){
@@ -6147,6 +6355,89 @@ function _showCfTipForRow(row,isDrag){
   _cfTipEl=tip;
 }
 function _removeCfTip(){if(_cfTipEl){_cfTipEl.remove();_cfTipEl=null;}_cfDragging=false;}
+
+// === Done Shots — hover video preview (above cursor) ===
+let _dsHoverEl=null,_dsHoverShotId=null;
+function _setupDoneShotsHoverPreview(container){
+  container.querySelectorAll('tr[data-ds-shot] td.f-name').forEach(cell=>{
+    const row=cell.closest('tr');
+    if(!row)return;
+    const shotId=row.dataset.dsShot;
+    const color=row.dataset.dsColor||'#3fb950';
+    cell.addEventListener('mouseenter',e=>{_dsHoverShow(shotId,e,color);});
+    cell.addEventListener('mousemove',e=>{_dsHoverMove(e);});
+    cell.addEventListener('mouseleave',()=>{_dsHoverHide();});
+  });
+}
+function _dsHoverPickPreviewUrl(shotId){
+  const versions=state[shotId]?.versions||[];
+  // Prefer latest version preview (the approved one)
+  for(let i=versions.length-1;i>=0;i--){
+    if(versions[i]?.url)return {url:versions[i].url,label:versions[i].name||('v'+(i+1))};
+  }
+  // Fallback: source preview (state files or convention)
+  const srcArr=state[shotId]?.files?.['source/preview']||[];
+  if(srcArr.length&&srcArr[0]?.r2key)return {url:CDN_BASE+'/'+srcArr[0].r2key,label:'source'};
+  if(typeof hasGif==='function'&&hasGif(shotId))return {url:CDN_BASE+'/video/'+shotId+'_prev.mp4',label:'source'};
+  return null;
+}
+function _dsHoverShow(shotId,e,borderColor){
+  if(_dsHoverShotId===shotId&&_dsHoverEl)return;
+  _dsHoverHide();
+  _dsHoverShotId=shotId;
+  // Suppress small cf-tip — we have richer preview
+  _removeCfTip();
+  const info=_dsHoverPickPreviewUrl(shotId);
+  const wrap=document.createElement('div');
+  wrap.className='ds-hover-preview';
+  const col=borderColor||'#3fb950';
+  wrap.style.borderColor=col;
+  wrap.style.boxShadow='0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px '+col+'33';
+  if(info){
+    wrap.innerHTML=`<video muted loop playsinline preload="auto" src="${esc(info.url)}"></video><div class="dshp-label"><span class="dshp-id" style="color:${col}">${esc(shotId)}</span><span>${esc(info.label)}</span></div><div class="dshp-loading">Loading…</div>`;
+  } else {
+    wrap.innerHTML=`<div style="width:320px;height:180px;display:flex;align-items:center;justify-content:center;color:#8b949e;font-size:12px">No preview available</div><div class="dshp-label"><span class="dshp-id" style="color:${col}">${esc(shotId)}</span></div>`;
+  }
+  document.body.appendChild(wrap);
+  _dsHoverEl=wrap;
+  const vid=wrap.querySelector('video');
+  if(vid){
+    vid.addEventListener('canplay',()=>{
+      if(_dsHoverEl!==wrap)return;
+      const ld=wrap.querySelector('.dshp-loading');if(ld)ld.remove();
+      vid.play().catch(()=>{});
+    },{once:true});
+    vid.addEventListener('error',()=>{
+      if(_dsHoverEl!==wrap)return;
+      const ld=wrap.querySelector('.dshp-loading');if(ld)ld.textContent='Failed to load';
+    },{once:true});
+  }
+  _dsHoverMove(e);
+  requestAnimationFrame(()=>{if(_dsHoverEl===wrap)wrap.classList.add('visible');});
+}
+function _dsHoverMove(e){
+  if(!_dsHoverEl)return;
+  const w=_dsHoverEl.offsetWidth||340;
+  const h=_dsHoverEl.offsetHeight||200;
+  // Position ABOVE cursor, centered horizontally
+  let left=e.clientX-w/2;
+  let top=e.clientY-h-16;
+  // Clamp viewport
+  if(left<8)left=8;
+  if(left+w>window.innerWidth-8)left=window.innerWidth-w-8;
+  if(top<8)top=e.clientY+20;// flip below if no room above
+  _dsHoverEl.style.left=left+'px';
+  _dsHoverEl.style.top=top+'px';
+}
+function _dsHoverHide(){
+  if(_dsHoverEl){
+    const vid=_dsHoverEl.querySelector('video');
+    if(vid){try{vid.pause();vid.removeAttribute('src');vid.load();}catch(e){}}
+    _dsHoverEl.remove();
+    _dsHoverEl=null;
+  }
+  _dsHoverShotId=null;
+}
 function _showNewFolderInput(id){
   const row=document.getElementById("newFolderRow");
   if(row){row.style.display="flex";document.getElementById("newFolderName").focus();}
@@ -6198,11 +6489,13 @@ async function _deleteFolder(id,name){
 function _getCurrentR2Folder(id){
   if(id==='__admin'){return _filesPath.length===0?'admin':'admin/'+_filesPath.join('/');}
   if(id==='__myfiles'&&_filesPath.length>0){const shotId=_filesPath[0];const rest=_filesPath.slice(1);return rest.length?'files/'+shotId+'/'+rest.join('/'):'files/'+shotId;}
+  if(id==='__doneshots'&&_filesPath.length>0){return 'files/'+_filesPath[0]+'/versions/final';}
   if(_filesPath.length===0)return 'files/'+id;
   return 'files/'+id+'/'+_filesPath.join('/');
 }
 function _getCurrentStateKey(){
   if(_shotCurrentId==='__admin'){return _filesPath.length===0?'_root':_filesPath.join('/');}
+  if(_shotCurrentId==='__doneshots'){return null;}
   if(_shotCurrentId==='__myfiles'){
     if(_filesPath.length<=1)return null;
     const inner=_filesPath.slice(1);
@@ -6713,15 +7006,27 @@ function _downloadFolderByName(id,name){
   const {items}=_resolveFilesPath(id);
   const folder=items.find(f=>f.name===name&&f.type==='folder');
   if(!folder||!folder.children)return;
-  const files=_collectFileUrlsWithPath(folder.children,'');
-  const prefix=id==='__admin'?'admin':id;
-  _downloadAsZip(files,prefix+'_'+name);
+  // Done Shots: nest files under "<shotId>_FINAL/" so the zip has a clearly labeled folder
+  const folderPrefix=(id==='__doneshots'&&_filesPath.length===0)?(name+'_FINAL/'):'';
+  const files=_collectFileUrlsWithPath(folder.children,folderPrefix);
+  const prefix=id==='__admin'?'admin':(id==='__myfiles'?'myfiles':(id==='__doneshots'?'doneshots':id));
+  const zipName=id==='__doneshots'?(name+'_FINAL'):(prefix+'_'+name);
+  _downloadAsZip(files,zipName);
 }
 function _downloadAllFiles(id){
   if(_blockGuest("Guests cannot download files"))return;
   const root=_getFilesRoot(id);
-  const files=_collectFileUrlsWithPath(root,'');
-  const prefix=id==='__admin'?'admin':id;
+  // Done Shots: only green (status=done AND has final files)
+  let files;
+  if(id==='__doneshots'){
+    files=[];
+    for(const f of root){
+      if(f.type==='folder'&&f.children&&f.colorTag==='#3fb950')files=files.concat(_collectFileUrlsWithPath(f.children,f.name+'_FINAL/'));
+    }
+  } else {
+    files=_collectFileUrlsWithPath(root,'');
+  }
+  const prefix=id==='__admin'?'admin':(id==='__myfiles'?'myfiles':(id==='__doneshots'?'doneshots':id));
   _downloadAsZip(files,prefix+'_files');
 }
 function _fileIcon(name){
