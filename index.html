@@ -987,7 +987,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0087</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0088</div>
 
 <script>
 const USERS = {
@@ -2138,9 +2138,9 @@ document.getElementById("artistStats").addEventListener("click",e=>{
   const card=e.target.closest(".artist-card[data-artist]");
   if(!card)return;
   artistFilter=card.dataset.artist;
-  // Plain card body click clears any status filter so the user sees
-  // every shot of the picked artist; the tabs set their own status.
-  currentFilter='all';
+  // Keep whatever status filter the user already had selected — picking
+  // a different artist must not silently drop the REVIEW / DONE / TODO
+  // filter that was in effect.
   render();
 });
 // Top/bottom tab on an artist card → filter by artist + status at once.
