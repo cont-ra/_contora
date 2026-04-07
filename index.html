@@ -931,7 +931,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0039</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0040</div>
 
 <script>
 const USERS = {
@@ -1367,12 +1367,10 @@ function saveState(s){
 
 async function _pushRemote(s){
   try{
-    // Optimistic locking: only update if server timestamp matches what we last saw.
-    // Prevents stale tabs from overwriting newer state (last-write-wins bug).
-    let url=SUPA_URL+"/rest/v1/tracker_state?id=eq.main";
-    if(_lastKnownUpdatedAt){
-      url+="&updated_at=eq."+encodeURIComponent(_lastKnownUpdatedAt);
-    }
+    // HOTFIX 2026-04-07: optimistic locking caused false-positive conflicts in production.
+    // Conditional filter and conflict detection DISABLED until we debug the timestamp mismatch.
+    // _lastKnownUpdatedAt is still tracked (for debug logs) but not enforced.
+    const url=SUPA_URL+"/rest/v1/tracker_state?id=eq.main";
     const r=await fetch(url,{
       method:"PATCH",
       headers:{...SUPA_HEADERS,"Prefer":"return=representation"},
@@ -1380,21 +1378,7 @@ async function _pushRemote(s){
     });
     if(!r.ok){const t=await r.text();console.error("Supabase PATCH error:",t);throw new Error(t);}
     const updatedRows=await r.json();
-    // Conflict detection: filter didn't match → empty array → server has newer state
-    if(_lastKnownUpdatedAt&&Array.isArray(updatedRows)&&updatedRows.length===0){
-      console.warn("[_pushRemote] CONFLICT — server changed since last sync, re-pulling");
-      const nc=document.getElementById("saveNotice");
-      if(nc){nc.textContent="Conflict — re-syncing...";nc.style.background="#d29922";}
-      await _pullRemote();
-      try{runMigrations();render();}catch(e){}
-      if(nc){nc.textContent="⚠ Conflict: re-do your last action";nc.style.background="#d29922";
-        setTimeout(()=>{nc.classList.remove("show");nc.style.background="";},6000);}
-      if(typeof _showAlert==='function'){
-        _showAlert('Sync conflict','Another device saved changes while you were editing.<br><br>The page has been refreshed with the latest data. Your last action was <b>not saved</b> — please redo it.');
-      }
-      return;
-    }
-    // Success: update tracker from server response
+    // Track latest timestamp from server response (debug aid, not enforced)
     if(Array.isArray(updatedRows)&&updatedRows[0]?.updated_at){
       _lastKnownUpdatedAt=updatedRows[0].updated_at;
     }
