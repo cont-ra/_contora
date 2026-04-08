@@ -1042,7 +1042,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0110</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0111</div>
 
 <script>
 const USERS = {
@@ -2164,19 +2164,35 @@ function _perArtistStats(events, cycles){
     }
   }
 
-  // Walk events to count activity per day
+  // Walk events to count activity per day.
+  // Bulk-upload coalescing: many material_uploaded events from a single
+  // drag-drop of a folder share (shot_id, minute, by) — count them as ONE
+  // upload action (the underlying file rows remain in the DB; this only
+  // affects the activity chart so a 99-frame folder doesn't look like a
+  // huge spike).
   const now=Date.now();
   const startWindow=now-14*86400000;
+  const seenBulkKeys=new Set();
   for(const e of events){
     const a=_eventArtist(e);
     if(!a||!(a in perArtist))continue;
+    let countThis=true;
+    if(e.event_type==="material_uploaded"||e.event_type==="material_deleted"){
+      const ts=Date.parse(e.occurred_at);
+      const minuteBucket=Math.floor(ts/60000);
+      const by=(e.payload&&e.payload.by)||"";
+      const key=e.shot_id+"|"+minuteBucket+"|"+by+"|"+e.event_type;
+      if(seenBulkKeys.has(key))countThis=false;
+      else seenBulkKeys.add(key);
+    }
+    if(!countThis)continue;
     perArtist[a].total_events+=1;
     if(e.event_type==="delivered"||e.event_type==="final_uploaded"||e.event_type==="approved"||(e.event_type==="status_changed"&&e.payload&&e.payload.to==="done")){
       perArtist[a].done_events+=1;
     }
     const ts=Date.parse(e.occurred_at);
     if(ts>=startWindow&&ts<=now){
-      const day=new Date(ts).toISOString().slice(0,10); // YYYY-MM-DD
+      const day=new Date(ts).toISOString().slice(0,10);
       perArtist[a].activity_by_day[day]=(perArtist[a].activity_by_day[day]||0)+1;
     }
   }
@@ -2313,17 +2329,25 @@ function _artistColor(artistId){
 }
 
 // Daily activity counts (events per day) for ANY actor over last N days.
-// Used for the activity chart to include non-artist users (client / guest)
-// without polluting the speed/completion table.
+// Used for the activity chart to include non-artist users (client / guest).
+// Bulk-upload coalescing: same logic as in _perArtistStats.
 function _dailyActivityFor(events, actorId, days){
   days=days||14;
   const now=Date.now();
   const startWindow=now-(days-1)*86400000;
   const byDay={};
+  const seenBulkKeys=new Set();
   for(const e of events){
     if(e.actor_id!==actorId)continue;
     const ts=Date.parse(e.occurred_at);
     if(ts<startWindow||ts>now)continue;
+    if(e.event_type==="material_uploaded"||e.event_type==="material_deleted"){
+      const minuteBucket=Math.floor(ts/60000);
+      const by=(e.payload&&e.payload.by)||"";
+      const key=e.shot_id+"|"+minuteBucket+"|"+by+"|"+e.event_type;
+      if(seenBulkKeys.has(key))continue;
+      seenBulkKeys.add(key);
+    }
     const day=new Date(ts).toISOString().slice(0,10);
     byDay[day]=(byDay[day]||0)+1;
   }
