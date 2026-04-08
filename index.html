@@ -1050,7 +1050,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0115</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0116</div>
 
 <script>
 const USERS = {
@@ -5662,8 +5662,10 @@ function updateStats(){
     // that still needs attention — total minus already-done shots.
     let totalActive=0;
     artists.forEach(a=>{
-      const s=ac[a.id]||{total:0,done:0};
-      totalActive+=Math.max(0,s.total-s.done);
+      const s=ac[a.id]||{total:0,done:0,delivered:0};
+      // Both done AND delivered are "completed" — they don't count toward
+      // active workload that still needs attention.
+      totalActive+=Math.max(0,s.total-s.done-(s.delivered||0));
     });
     let html='';
     // All Artists / Unassigned stack — two cards layered, hover separates
@@ -5686,8 +5688,10 @@ function updateStats(){
     html+=`<div class="all-stack" data-stack-top="${stackTop}">${stackTop==='all'?(allCard+unassignedCardBack):(unassignedCard+allCardBack)}</div>`;
     // Per-artist cards
     artists.forEach(a=>{
-      const s=ac[a.id]||{total:0,done:0,todo:0,progress:0,review:0};
-      const active=Math.max(0,s.total-s.done);
+      const s=ac[a.id]||{total:0,done:0,delivered:0,todo:0,progress:0,review:0};
+      const sDelivered=s.delivered||0;
+      const sCompleted=s.done+sDelivered; // green check counter = done + delivered
+      const active=Math.max(0,s.total-sCompleted);
       const col=getUserColor(a.id)||'#8b949e';
       const isActive=artistFilter===a.id;
       // Done count rendered as a green check badge floating above the
@@ -5697,9 +5701,12 @@ function updateStats(){
       const tabFs=isActive?'12px':'10px';
       const tabPadDone=isActive?'2px 11px 4px':'1px 9px 3px';
       const tabPadRev=isActive?'3px 11px 2px':'2px 9px 1px';
-      const doneBadge=s.done>0?`<div data-tab-status="done" onclick="event.stopPropagation();_artistTabFilter('${a.id}','done',this)" title="Filter ${esc(a.display)} → DONE" style="position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid #30363d;border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:${tabPadDone};font-size:${tabFs};font-weight:600;line-height:1.2;white-space:nowrap;width:max-content;display:inline-block;transition:font-size 0.15s,padding 0.15s;cursor:pointer">✓&nbsp;${s.done}</div>`:'';
+      // Badge shows total completed (done + delivered). Click filters to "done"
+      // status which is the most common "done-ish" filter; delivered shots are
+      // also visible there via the analytics dashboard.
+      const doneBadge=sCompleted>0?`<div data-tab-status="done" onclick="event.stopPropagation();_artistTabFilter('${a.id}','done',this)" title="Filter ${esc(a.display)} → DONE (${s.done} done + ${sDelivered} delivered)" style="position:absolute;left:50%;top:0;transform:translate(-50%,calc(-100% + 1px));background:#161b22;color:#3fb950;border:1px solid #30363d;border-bottom-color:#161b22;border-radius:8px 8px 0 0;padding:${tabPadDone};font-size:${tabFs};font-weight:600;line-height:1.2;white-space:nowrap;width:max-content;display:inline-block;transition:font-size 0.15s,padding 0.15s;cursor:pointer">✓&nbsp;${sCompleted}</div>`:'';
       const reviewBadge=s.review>0?`<div data-tab-status="review" onclick="event.stopPropagation();_artistTabFilter('${a.id}','review',this)" title="Filter ${esc(a.display)} → REVIEW" style="position:absolute;left:50%;bottom:0;transform:translate(-50%,calc(100% - 1px));background:#161b22;color:#58a6ff;border:1px solid #30363d;border-top-color:#161b22;border-radius:0 0 8px 8px;padding:${tabPadRev};font-size:${tabFs};font-weight:600;line-height:1.2;white-space:nowrap;width:max-content;display:inline-block;transition:font-size 0.15s,padding 0.15s;cursor:pointer">◉&nbsp;${s.review}</div>`:'';
-      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'};color:${col}" title="${active} active · ${s.done} done · ${s.review} review · ${s.total} total">
+      html+=`<div class="artist-card${isActive?' active':''}" data-artist="${a.id}" style="position:relative;border-color:${col}${isActive?'':'44'};color:${col}" title="${active} active · ${s.done} done · ${sDelivered} delivered · ${s.review} review · ${s.total} total">
         ${doneBadge}
         <div style="font-size:11px;color:#8b949e;font-weight:600">${esc(a.display)}</div>
         <div style="font-size:20px;font-weight:700;color:${col};line-height:1.1;margin-top:6px">${active}</div>
