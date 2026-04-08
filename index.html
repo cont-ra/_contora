@@ -1042,7 +1042,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0109</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0110</div>
 
 <script>
 const USERS = {
@@ -2305,8 +2305,34 @@ function _artistColor(artistId){
     const c=getUserColor(artistId);
     if(c)return c;
   }
-  const fallback={nikita:"#58a6ff",igor:"#3fb950",katya:"#d29922",moon_carrots:"#f85149"};
+  const fallback={
+    nikita:"#58a6ff",igor:"#3fb950",katya:"#d29922",moon_carrots:"#f85149",
+    client:"#a371f7",guest:"#6e7681"
+  };
   return fallback[artistId]||"#8b949e";
+}
+
+// Daily activity counts (events per day) for ANY actor over last N days.
+// Used for the activity chart to include non-artist users (client / guest)
+// without polluting the speed/completion table.
+function _dailyActivityFor(events, actorId, days){
+  days=days||14;
+  const now=Date.now();
+  const startWindow=now-(days-1)*86400000;
+  const byDay={};
+  for(const e of events){
+    if(e.actor_id!==actorId)continue;
+    const ts=Date.parse(e.occurred_at);
+    if(ts<startWindow||ts>now)continue;
+    const day=new Date(ts).toISOString().slice(0,10);
+    byDay[day]=(byDay[day]||0)+1;
+  }
+  const out=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date(now-i*86400000).toISOString().slice(0,10);
+    out.push({day:d,count:byDay[d]||0});
+  }
+  return out;
 }
 // ============================================================
 
@@ -2717,7 +2743,19 @@ async function openAnalytics(){
         color:_artistColor(a.artist),
         values:a.activity_14d.map(d=>d.count)
       }));
-      html+='<h4 style="font-size:13px;margin:16px 0 8px;color:#c9d1d9">📊 Daily activity comparison (events per day, last 14 days)</h4>';
+      // Add client + guest activity (only if they have any events in the window)
+      for(const extraActor of ["client","guest"]){
+        const days=_dailyActivityFor(events,extraActor,14);
+        const total=days.reduce((s,d)=>s+d.count,0);
+        if(total>0){
+          seriesActivity.push({
+            label:extraActor,
+            color:_artistColor(extraActor),
+            values:days.map(d=>d.count)
+          });
+        }
+      }
+      html+='<h4 style="font-size:13px;margin:16px 0 8px;color:#c9d1d9">📊 Daily activity comparison (events per day, last 14 days) <span style="color:#484f58;font-weight:normal">— includes client &amp; guest if active</span></h4>';
       html+='<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:12px">';
       html+=_buildLineChart(seriesActivity,xLabelsDays,"events / day");
       html+='</div>';
