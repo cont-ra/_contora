@@ -1050,7 +1050,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0116</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0117</div>
 
 <script>
 const USERS = {
@@ -2341,6 +2341,100 @@ function _artistColor(artistId){
   return fallback[artistId]||"#8b949e";
 }
 
+// === Review sessions analysis ===
+// A "review session" starts when an artist uploads a version (submits for
+// review) and ends with either:
+//   - APPROVED: approved/final_uploaded/delivered/status_changed→done event
+//   - REWORKED: another version_uploaded (artist iterated) OR explicit reopened
+// Open sessions (last version with no follow-up) are not counted.
+function _reviewSessions(events, shotId){
+  const sorted=events.filter(e=>e.shot_id===shotId)
+    .sort((a,b)=>Date.parse(a.occurred_at)-Date.parse(b.occurred_at));
+  const sessions=[];
+  let pending=null;
+  for(const e of sorted){
+    const ts=Date.parse(e.occurred_at);
+    if(e.event_type==="version_uploaded"){
+      if(pending){
+        sessions.push({start:pending.start,end:ts,duration_days:(ts-pending.start)/86400000,outcome:"reworked"});
+      }
+      pending={start:ts};
+    }else if(e.event_type==="approved"||e.event_type==="final_uploaded"||e.event_type==="delivered"||(e.event_type==="status_changed"&&e.payload&&(e.payload.to==="done"||e.payload.to==="delivered"))){
+      if(pending){
+        sessions.push({start:pending.start,end:ts,duration_days:(ts-pending.start)/86400000,outcome:"approved"});
+        pending=null;
+      }
+    }else if(e.event_type==="reopened"||(e.event_type==="status_changed"&&e.payload&&e.payload.to==="progress"&&pending)){
+      if(pending){
+        sessions.push({start:pending.start,end:ts,duration_days:(ts-pending.start)/86400000,outcome:"reworked"});
+        pending=null;
+      }
+    }
+  }
+  return sessions;
+}
+
+// Aggregate review stats across all shots
+function _aggregateReviewStats(events){
+  const shotIds=new Set();
+  for(const e of events)shotIds.add(e.shot_id);
+  const now=Date.now();
+  const startWindow=now-13*86400000;
+  const days=[];
+  for(let i=13;i>=0;i--){
+    days.push({
+      day:new Date(now-i*86400000).toISOString().slice(0,10),
+      approved:0,reworked:0,durations:[]
+    });
+  }
+  const dayIndex={};
+  for(let i=0;i<days.length;i++)dayIndex[days[i].day]=i;
+  let totalApproved=0,totalReworked=0;
+  const allDurations=[];
+  const perArtist={};
+  for(const sid of shotIds){
+    if(_doneKind(sid)==="skip")continue;
+    const sessions=_reviewSessions(events,sid);
+    const artist=_shotAssignee(sid);
+    if(artist&&!perArtist[artist])perArtist[artist]={approved:0,reworked:0,durations:[]};
+    for(const s of sessions){
+      if(s.duration_days<0)continue;
+      if(s.outcome==="approved"){totalApproved++;allDurations.push(s.duration_days);}
+      else totalReworked++;
+      if(artist){
+        if(s.outcome==="approved")perArtist[artist].approved++;
+        else perArtist[artist].reworked++;
+        perArtist[artist].durations.push(s.duration_days);
+      }
+      if(s.end>=startWindow&&s.end<=now){
+        const dayKey=new Date(s.end).toISOString().slice(0,10);
+        const idx=dayIndex[dayKey];
+        if(idx!==undefined){
+          if(s.outcome==="approved")days[idx].approved++;
+          else days[idx].reworked++;
+          days[idx].durations.push(s.duration_days);
+        }
+      }
+    }
+  }
+  function median(arr){
+    if(!arr.length)return null;
+    const s=arr.slice().sort((a,b)=>a-b);
+    return s[Math.floor(s.length/2)];
+  }
+  const totalSessions=totalApproved+totalReworked;
+  return {
+    total_approved:totalApproved,
+    total_reworked:totalReworked,
+    total_sessions:totalSessions,
+    approval_rate:totalSessions>0?totalApproved/totalSessions:null,
+    median_duration:median(allDurations),
+    p85_duration:allDurations.length?(allDurations.slice().sort((a,b)=>a-b))[Math.floor(allDurations.length*0.85)]:null,
+    days,
+    perArtist
+  };
+}
+
 // Daily activity counts (events per day) for ANY actor over last N days.
 // Used for the activity chart to include non-artist users (client / guest).
 // Bulk-upload coalescing: same logic as in _perArtistStats.
@@ -2843,6 +2937,82 @@ async function openAnalytics(){
       html+='<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:16px">';
       html+=_buildLineChart(seriesCumulative,xLabelsDays,"shots done");
       html+='</div>';
+
+      // === Review velocity & outcomes ===
+      const reviewStats=_aggregateReviewStats(events);
+      html+='<h3 style="font-size:14px;margin:24px 0 8px">Review velocity &amp; outcomes <span style="color:#484f58;font-weight:normal">— how fast review happens and how often it leads to approval vs rework</span></h3>';
+
+      // Summary cards
+      const apprRate=reviewStats.approval_rate;
+      const apprColor=apprRate===null?"#8b949e":(apprRate>=0.7?"#3fb950":apprRate>=0.4?"#d29922":"#f85149");
+      html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">';
+      html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Approval rate</div><div style="font-size:24px;font-weight:600;color:'+apprColor+';margin-top:4px">'+(apprRate===null?"—":(Math.round(apprRate*100)+"%"))+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">approved vs total reviews</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Approved</div><div style="font-size:24px;font-weight:600;color:#3fb950;margin-top:4px">'+reviewStats.total_approved+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">total approvals all-time</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Reworked</div><div style="font-size:24px;font-weight:600;color:#d29922;margin-top:4px">'+reviewStats.total_reworked+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">sent back for changes</div></div>';
+      html+='<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px"><div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Typical review</div><div style="font-size:24px;font-weight:600;color:#58a6ff;margin-top:4px">'+_fmtDays(reviewStats.median_duration)+'</div><div style="color:#8b949e;font-size:11px;margin-top:4px">median time to outcome</div></div>';
+      html+='</div>';
+
+      // Daily outcomes line chart (approved vs reworked counts per day)
+      const reviewDays=reviewStats.days;
+      const reviewLabels=reviewDays.map(d=>{
+        const dt=new Date(d.day);
+        const m=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        return m[dt.getMonth()]+" "+dt.getDate();
+      });
+      const reviewSeriesOutcomes=[
+        {label:"approved",color:"#3fb950",values:reviewDays.map(d=>d.approved)},
+        {label:"reworked",color:"#d29922",values:reviewDays.map(d=>d.reworked)}
+      ];
+      html+='<h4 style="font-size:13px;margin:16px 0 8px;color:#c9d1d9">📊 Daily review outcomes (last 14 days)</h4>';
+      html+='<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:12px">';
+      html+=_buildLineChart(reviewSeriesOutcomes,reviewLabels,"reviews / day");
+      html+='</div>';
+
+      // Daily median review duration line chart
+      const reviewSeriesDuration=[{
+        label:"median review duration",color:"#58a6ff",
+        values:reviewDays.map(d=>{
+          if(!d.durations.length)return 0;
+          const sorted=d.durations.slice().sort((a,b)=>a-b);
+          return sorted[Math.floor(sorted.length/2)];
+        })
+      }];
+      html+='<h4 style="font-size:13px;margin:16px 0 8px;color:#c9d1d9">⏱ Review speed trend (median time per day)</h4>';
+      html+='<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:12px">';
+      html+=_buildLineChart(reviewSeriesDuration,reviewLabels,"days to outcome");
+      html+='</div>';
+
+      // Per-artist approval rate table
+      const artistRows=Object.keys(reviewStats.perArtist).filter(a=>{
+        const p=reviewStats.perArtist[a];
+        return (p.approved+p.reworked)>0;
+      });
+      if(artistRows.length){
+        html+='<h4 style="font-size:13px;margin:16px 0 8px;color:#c9d1d9">By artist — approval rate &amp; review speed</h4>';
+        html+='<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><thead><tr style="background:#161b22"><th style="text-align:left;padding:8px;border:1px solid #30363d">Artist</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Approved</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Reworked</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Approval rate</th><th style="text-align:right;padding:8px;border:1px solid #30363d">Median review time</th></tr></thead><tbody>';
+        // Sort by approval rate desc
+        artistRows.sort((a,b)=>{
+          const pa=reviewStats.perArtist[a],pb=reviewStats.perArtist[b];
+          const ra=pa.approved/(pa.approved+pa.reworked);
+          const rb=pb.approved/(pb.approved+pb.reworked);
+          return rb-ra;
+        });
+        for(const a of artistRows){
+          const p=reviewStats.perArtist[a];
+          const total=p.approved+p.reworked;
+          const rate=p.approved/total;
+          const rateColor=rate>=0.7?"#3fb950":rate>=0.4?"#d29922":"#f85149";
+          const sortedDur=p.durations.slice().sort((x,y)=>x-y);
+          const medDur=sortedDur.length?sortedDur[Math.floor(sortedDur.length/2)]:null;
+          html+='<tr><td style="padding:8px;border:1px solid #30363d;font-weight:600">'+esc(a)+'</td>';
+          html+='<td style="padding:8px;border:1px solid #30363d;text-align:right;color:#3fb950">'+p.approved+'</td>';
+          html+='<td style="padding:8px;border:1px solid #30363d;text-align:right;color:#d29922">'+p.reworked+'</td>';
+          html+='<td style="padding:8px;border:1px solid #30363d;text-align:right;color:'+rateColor+';font-weight:600">'+Math.round(rate*100)+'%</td>';
+          html+='<td style="padding:8px;border:1px solid #30363d;text-align:right">'+_fmtDays(medDur)+'</td></tr>';
+        }
+        html+='</tbody></table>';
+      }
+      html+='<p style="font-size:11px;color:#484f58;margin:0 0 16px">A "review session" = from version upload to next outcome (approval or another version = rework). Synth-backfilled multi-version shots are inferred as N-1 rework cycles + 1 approval. Live status_changed events from Phase 1 hooks will give precise per-flip durations as data accumulates.</p>';
     }
 
     // Category table with shrinkage
