@@ -1105,7 +1105,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0130</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0131</div>
 
 <script>
 const USERS = {
@@ -1650,6 +1650,11 @@ let _lastKnownVersion=null;
 const REGISTRY_ROW_ID="__registry";
 const LEGACY_PROJECT_ID="main";     // existing row id — kept for back-compat
 const LAST_PROJECT_KEY="kh_last_project";
+// URL share override: e.g. ?project=kh_car_race[&guest=1]. Read once at load.
+// Any session (typically guest) pinned by a share link will land on and be
+// locked to this project, regardless of localStorage / user assignments.
+const URL_PROJECT_OVERRIDE=(()=>{try{return new URLSearchParams(window.location.search).get('project')||null;}catch(e){return null;}})();
+const URL_FORCE_GUEST=(()=>{try{const v=new URLSearchParams(window.location.search).get('guest');return v==='1'||v==='true';}catch(e){return false;}})();
 // Starts from localStorage — may change after login + project pick
 let CURRENT_PROJECT_ID=(()=>{try{return localStorage.getItem(LAST_PROJECT_KEY)||LEGACY_PROJECT_ID;}catch(e){return LEGACY_PROJECT_ID;}})();
 // In-memory registry (pulled at boot / on changes)
@@ -1746,6 +1751,14 @@ function _initAuth(){
       const params=new URLSearchParams(window.location.search);
       if(params.get('auth')){
         if(_tryAuthLink())return;
+      }
+      // Share link with ?project=<id>[&guest=1]: auto-login as guest if there's
+      // no existing session, so recipients land directly on the pinned project.
+      // The URL param is NOT stripped — it persists so page reload keeps the
+      // same pinning, and so _resolveProjectSelection can honour it.
+      if(URL_PROJECT_OVERRIDE&&getProjectById&&getProjectById(URL_PROJECT_OVERRIDE)){
+        const persisted=_readPersistedUser();
+        if(URL_FORCE_GUEST||!persisted){guestLogin();return;}
       }
       const s=_readPersistedUser();
       if(s==="guest"){guestLogin();return;}
@@ -3698,6 +3711,13 @@ async function _bootstrapRegistry(){
 // so existing team members aren't locked out until an admin assigns them).
 function getAvailableProjects(userId){
   if(!registry||!Array.isArray(registry.projects))return [];
+  // Share-link override: a guest opened with ?project=<id> is locked to
+  // exactly that project. Skip role/assignment logic entirely so the badge
+  // renders read-only (single project → no "switch" affordance).
+  if(URL_PROJECT_OVERRIDE&&(userId==='guest'||!userId)){
+    const pinned=registry.projects.find(p=>p.id===URL_PROJECT_OVERRIDE);
+    if(pinned)return [pinned];
+  }
   const u=registry.users?.[userId]||USERS[userId];
   if(u&&u.role==='admin')return registry.projects.slice();
   const assigned=registry.userProjects?.[userId];
@@ -5464,6 +5484,19 @@ function openProjectManager(){
   _renderProjectManager();
 }
 function closeProjectManager(){const d=document.getElementById("projectManagerOverlay");if(d)d.remove();}
+// Build a read-only share link that auto-logs recipients in as guest and
+// locks them to the given project. Appends ?project=<pid>&guest=1 to the
+// current page URL. Copy to clipboard with a tiny toast.
+function _copyGuestLink(pid){
+  if(!pid)return;
+  const url=location.origin+location.pathname+'?project='+encodeURIComponent(pid)+'&guest=1';
+  const done=()=>{try{_flashTinyToast&&_flashTinyToast('Guest link copied');}catch(e){}alert('Guest link:\n\n'+url);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done,()=>done());
+  } else {
+    const ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}ta.remove();done();
+  }
+}
 function _renderProjectManager(){
   const body=document.getElementById("projectManagerBody");if(!body)return;
   const projects=registry.projects||[];
@@ -5484,6 +5517,7 @@ function _renderProjectManager(){
     html+=`<code style="color:#8b949e;font-size:11px">${esc(p.id)}</code>`;
     html+=legacy+current;
     html+=`<button class="u-btn" onclick="switchProject('${esc(p.id)}');closeProjectManager()" title="Switch to this project">↪ Open</button>`;
+    html+=`<button class="u-btn" onclick="_copyGuestLink('${esc(p.id)}')" title="Copy a read-only guest share link for this project">🔗 Guest link</button>`;
     if(!p.legacyR2&&p.id!==CURRENT_PROJECT_ID){
       html+=`<button class="u-del" onclick="_deleteProject('${esc(p.id)}')" title="Delete project">&times;</button>`;
     }
