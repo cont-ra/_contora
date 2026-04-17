@@ -296,21 +296,23 @@
   tbody tr { border-bottom: 4px solid #0d1117; transition: 0.1s; }
   tbody tr:hover { background: #1c2128; }
   tbody td { padding: 10px 14px; font-size: 14px; vertical-align: middle; }
-  .prio-tag { display: inline-block; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; background: transparent; transition: .15s; vertical-align: middle; }
+  .prio-tag { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 1px solid #30363d; background: transparent; transition: .15s; vertical-align: middle; font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.55); line-height: 1; }
   .prio-tag:hover { border-color: #8b949e; }
   .prio-tag.prio-red { background: #f85149; border-color: #f85149; }
   .prio-tag.prio-yellow { background: #d29922; border-color: #d29922; }
   .prio-tag.prio-green { background: #3fb950; border-color: #3fb950; }
-  .prio-dropdown { position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 6px; z-index: 5000; display: flex; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .prio-tag.has-diff-only { color: #d29922; text-shadow: none; }
+  .prio-dropdown { position: fixed; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 8px; z-index: 5000; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .prio-dd-row { display: flex; gap: 6px; align-items: center; }
+  .prio-dd-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 4px; min-width: 58px; }
   .prio-dropdown .prio-opt { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: .1s; }
   .prio-dropdown .prio-opt:hover { transform: scale(1.2); }
   .prio-dropdown .prio-opt.sel { border-color: #fff; }
-  .flag-cell { display: inline-flex; align-items: center; gap: 6px; }
-  .diff-col { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1; }
-  .diff-col .diff-star { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; font-size: 12px; color: #30363d; cursor: default; user-select: none; transition: .1s; }
-  .diff-col .diff-star.on { color: #d29922; }
-  .diff-col.editable .diff-star { cursor: pointer; }
-  .diff-col.editable .diff-star:hover { color: #d29922; transform: scale(1.3); }
+  .prio-dd-row.diff { border-top: 1px solid #21262d; padding-top: 8px; gap: 3px; }
+  .dd-star { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; cursor: pointer; font-size: 13px; line-height: 1; color: #484f58; transition: .1s; user-select: none; }
+  .dd-star:hover { transform: scale(1.25); color: #d29922; }
+  .dd-star.on { color: #d29922; }
+  .dd-star.clear { color: #8b949e; font-size: 12px; margin-left: 4px; }
   tr.row-prio-red { background: rgba(248,81,73,0.08) !important; }
   tr.row-prio-red:hover { background: rgba(248,81,73,0.15) !important; }
   tr.row-prio-yellow { background: rgba(210,153,34,0.08) !important; }
@@ -1111,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0134</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0135</div>
 
 <script>
 const USERS = {
@@ -4604,14 +4606,15 @@ function setPriority(id,val){
   closePrioDropdown();
   render();
 }
-function getDifficulty(id){const v=state[id]?.difficulty;return Number.isInteger(v)&&v>=0&&v<=5?v:0;}
+function getDifficulty(id){const v=state[id]?.difficulty;return Number.isInteger(v)&&v>=0&&v<=10?v:0;}
 function setDifficulty(id,val){
-  if(!isEditMode()||!canEditDifficulty())return;
-  const v=Math.max(0,Math.min(5,parseInt(val,10)||0));
+  if(!canEditDifficulty())return;
+  const v=Math.max(0,Math.min(10,parseInt(val,10)||0));
   if(!state[id])state[id]={};
   if(v===0)delete state[id].difficulty;
   else state[id].difficulty=v;
   saveState(state);
+  closePrioDropdown();
   render();
 }
 function canEditPrio(){return isAdmin()||isClient();}
@@ -4619,10 +4622,17 @@ function canEditDifficulty(){return isAdmin();}
 function openPrioDropdown(id,el){
   if(!isEditMode()||!canEditPrio())return;
   closePrioDropdown();
-  const cur=getPriority(id);
+  const curP=getPriority(id);
+  const curD=getDifficulty(id);
   const rect=el.getBoundingClientRect();
   const dd=document.createElement("div");
   dd.className="prio-dropdown";dd.id="prioDropdown";
+  // Row 1 — priority colour
+  const prioRow=document.createElement("div");
+  prioRow.className="prio-dd-row";
+  const prioLbl=document.createElement("div");
+  prioLbl.className="prio-dd-label";prioLbl.textContent="Priority";
+  prioRow.appendChild(prioLbl);
   const opts=[
     {val:"red",color:"#f85149"},
     {val:"yellow",color:"#d29922"},
@@ -4631,31 +4641,39 @@ function openPrioDropdown(id,el){
   ];
   opts.forEach(o=>{
     const d=document.createElement("div");
-    d.className="prio-opt"+(cur===o.val?" sel":"");
+    d.className="prio-opt"+(curP===o.val?" sel":"");
     d.style.background=o.color;
     if(o.border)d.style.border="2px solid "+o.border;
     d.onclick=(e)=>{e.stopPropagation();setPriority(id,o.val);};
-    dd.appendChild(d);
+    prioRow.appendChild(d);
   });
+  dd.appendChild(prioRow);
+  // Row 2 — difficulty (admin only)
+  if(canEditDifficulty()){
+    const diffRow=document.createElement("div");
+    diffRow.className="prio-dd-row diff";
+    const diffLbl=document.createElement("div");
+    diffLbl.className="prio-dd-label";diffLbl.textContent="Difficulty";
+    diffRow.appendChild(diffLbl);
+    for(let i=1;i<=10;i++){
+      const s=document.createElement("div");
+      s.className="dd-star"+(i<=curD?" on":"");
+      s.textContent="★";
+      s.title=i+"/10";
+      s.onclick=(e)=>{e.stopPropagation();setDifficulty(id,i===curD?0:i);};
+      diffRow.appendChild(s);
+    }
+    const clearBtn=document.createElement("div");
+    clearBtn.className="dd-star clear";
+    clearBtn.textContent="✕";
+    clearBtn.title="Clear difficulty";
+    clearBtn.onclick=(e)=>{e.stopPropagation();setDifficulty(id,0);};
+    diffRow.appendChild(clearBtn);
+    dd.appendChild(diffRow);
+  }
   dd.style.top=(rect.bottom+4)+"px";dd.style.left=rect.left+"px";
   document.body.appendChild(dd);
   setTimeout(()=>document.addEventListener("click",_closePrioHandler,{once:true}),0);
-}
-// Build the 5-star difficulty column rendered next to the priority tag.
-// Shown read-only for non-admins (so everyone sees the rating); admins get
-// click-to-set on each star, and clicking the already-active top star clears.
-function _renderDiffCol(shotId){
-  const d=getDifficulty(shotId);
-  const editable=canEditDifficulty()&&isEditMode();
-  let html=`<span class="diff-col${editable?' editable':''}" data-shot-id="${shotId}" title="${d?'Difficulty '+d+'/5':'Difficulty'}">`;
-  // Render 1 at the top, 5 at the bottom — higher difficulty fills downward.
-  for(let i=1;i<=5;i++){
-    const on=i<=d;
-    const click=editable?`onclick="event.stopPropagation();setDifficulty('${shotId}',${i===d?0:i})"`:'';
-    html+=`<span class="diff-star${on?' on':''}" ${click}>★</span>`;
-  }
-  html+=`</span>`;
-  return html;
 }
 function _closePrioHandler(){closePrioDropdown();}
 function closePrioDropdown(){const d=document.getElementById("prioDropdown");if(d)d.remove();}
@@ -5436,7 +5454,28 @@ async function _pubHandleEntries(folder,entries){
   _pubRenderExisting(folder);
 }
 
-function openUserManager(){
+async function _hydrateLegacyPasswords(){
+  // One-time pull of plainKey values from the legacy "main" row so admins
+  // working in a freshly-created project can still see historical passwords.
+  // After the first successful pull they're mirrored to registry.users, so
+  // subsequent opens resolve locally via registry — no repeat fetch needed.
+  if(!registry||!registry.users)return;
+  const missing=Object.keys(registry.users).filter(id=>!registry.users[id]?.plainKey);
+  if(!missing.length)return;
+  try{
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(LEGACY_PROJECT_ID)+"&select=data",{headers:{apikey:SUPA_KEY,Authorization:"Bearer "+SUPA_KEY}});
+    const rows=await r.json();
+    const mainUsers=rows?.[0]?.data?.__users||null;
+    if(!mainUsers)return;
+    let patched=false;
+    for(const id of missing){
+      const pk=mainUsers[id]?.plainKey;
+      if(pk){registry.users[id].plainKey=pk;patched=true;}
+    }
+    if(patched){try{await _pushRegistry();}catch(e){console.warn('legacy password sync push failed:',e);}}
+  }catch(e){console.warn('legacy password fetch failed:',e);}
+}
+async function openUserManager(){
   if(!isAdmin())return;
   const ov=document.createElement("div");
   ov.className="admin-modal-overlay";ov.id="artistManagerOverlay";
@@ -5455,15 +5494,23 @@ function openUserManager(){
   html+=`</div></div>`;
   ov.innerHTML=html;
   document.body.appendChild(ov);
+  // Async: fill in any missing legacy passwords from the main row, then
+  // re-render the list in place. First open pays the network cost; later
+  // opens resolve everything from the registry cache.
+  _hydrateLegacyPasswords().then(()=>{
+    const box=document.getElementById('userList');
+    if(box)box.innerHTML=_renderUserList();
+  });
 }
 function _renderUserList(){
   let html="";
   const allUsers=Object.entries(USERS);
   allUsers.forEach(([id,u])=>{
-    const key=state.__users?.[id]?.plainKey||"";
-    // After multi-project migration the authoritative linkToken lives on
-    // registry.users (shared across projects); state.__users may be empty
-    // in freshly-created projects. Fall back to registry for the link.
+    // After multi-project migration state.__users can be empty in freshly
+    // created projects — the authoritative copy lives in registry.users.
+    // Fall back to the registry for both fields; _hydrateLegacyPasswords()
+    // backfills plainKey from the legacy "main" row on first open.
+    const key=state.__users?.[id]?.plainKey||registry?.users?.[id]?.plainKey||"";
     const lt=state.__users?.[id]?.linkToken||registry?.users?.[id]?.linkToken||"";
     const rc=getUserColor(id);
     html+=`<div class="user-card">`;
@@ -6143,8 +6190,11 @@ async function addUser(){
     state.__artists=artists;
   }
   saveState(state);
-  // Mirror into registry so login + multi-project routing see the new user
-  await _syncUserToRegistry(id,{hash,display:name,role,linkToken,telegram:tg||null});
+  // Mirror into registry so login + multi-project routing see the new user.
+  // plainKey is mirrored too so Manage Users can show it from any project
+  // (admins have full access to the registry row anyway, so this doesn't
+  // widen the exposure — the same row already stores the password hash).
+  await _syncUserToRegistry(id,{hash,display:name,role,linkToken,telegram:tg||null,plainKey:key});
   // Default assignment: the current project, so the new user sees *something*
   if(role!=='admin'&&CURRENT_PROJECT_ID){
     if(!registry.userProjects)registry.userProjects={};
@@ -6170,7 +6220,7 @@ async function regenKey(id){
   state.__users[id].plainKey=key;
   state.__users[id].linkToken=linkToken;
   saveState(state);
-  await _syncUserToRegistry(id,{hash,linkToken});
+  await _syncUserToRegistry(id,{hash,linkToken,plainKey:key});
   document.getElementById("userList").innerHTML=_renderUserList();
 }
 function changeUserRole(id,role){
@@ -11600,12 +11650,11 @@ function render(){
       const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
       // [0]=prio [1]=# [2]=ID+preview [3]=shotInfo [4]=cat [5]=tcIn [6]=tcOut [7]=artist [8]=status [9]=admin [10]=chat
       const prio=getPriority(r.id);
-      const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
+      const diff=getDifficulty(r.id);
+      const prioTagClass=(prio?'prio-tag prio-'+prio:'prio-tag')+(diff&&!prio?' has-diff-only':'');
       if(cells[0]){
         const box=cells[0].querySelector('.prio-tag');
-        if(box)box.className=prioTagClass;
-        const diffCol=cells[0].querySelector('.diff-col');
-        if(diffCol)diffCol.outerHTML=_renderDiffCol(r.id);
+        if(box){box.className=prioTagClass;box.textContent=diff?String(diff):'';box.title=diff?`Difficulty ${diff}/10`:'';}
       }
       tr.className=prio?'row-prio-'+prio:'';
       tr.dataset.rowStatus=st;
@@ -11627,13 +11676,15 @@ function _buildRow(r){
   const cp=chatPreview(r.id);const cpPrev=trunc(cp.text,20);
   const artistOpts=_getArtists().map(a=>`<option value="${a.id}" ${r.assignee===a.id?"selected":""}>${a.display}</option>`).join("");
   const prio=getPriority(r.id);
-  const prioTagClass=prio?'prio-tag prio-'+prio:'prio-tag';
+  const diff=getDifficulty(r.id);
+  const prioTagClass=(prio?'prio-tag prio-'+prio:'prio-tag')+(diff&&!prio?' has-diff-only':'');
   const rowPrioClass=prio?'row-prio-'+prio:'';
   const _ep=canEditPrio()&&isEditMode();
   const prioClick=_ep?`onclick="event.stopPropagation();openPrioDropdown('${r.id}',this)"`:'';
   const prioStyle=_ep?'':'style="cursor:default"';
+  const prioTitle=diff?`title="Difficulty ${diff}/10"`:'';
   return `<tr class="${rowPrioClass}" data-row-status="${st}">
-    <td><span class="flag-cell"><div class="${prioTagClass}" data-shot-id="${r.id}" ${prioClick} ${prioStyle}></div>${_renderDiffCol(r.id)}</span></td>
+    <td><div class="${prioTagClass}" data-shot-id="${r.id}" ${prioClick} ${prioStyle} ${prioTitle}>${diff?diff:''}</div></td>
     <td style="color:#484f58">${r.idx}</td>
     <td class="id-preview-cell"><div class="id-label" onclick="openShot('${r.id}')">${r.id}</div>${hasGif(r.id)?`<div class="gif-thumb-wrap" onclick="openGif('${r.id}')" onmouseenter="thumbPreviewStart(this,'${r.id}')" onmouseleave="thumbPreviewStop(this,'${r.id}')"><img class="gif-thumb" src="${CDN_BASE}/${projectPath('thumbs/'+r.id+'.jpg')}" loading="lazy"><div class="gif-play-icon"></div></div>`:'<div class="gif-none">—</div>'}</td>
     <td class="shot-info-cell" onmouseenter="showSiTooltip('${r.id}',event)" onmousemove="moveSiTooltip(event)" onmouseleave="hideSiTooltip()" onclick="event.stopPropagation();pinSiTooltip('${r.id}')" data-tid="${r.id}">${_renderShotInfo(r.id)}</td>
