@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0140</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0141</div>
 
 <script>
 const USERS = {
@@ -1660,12 +1660,13 @@ const _DEFAULT_ARTISTS=[{id:"nikita",display:"Nikita"},{id:"igor",display:"Igor"
 function _getArtists(){
   if(Array.isArray(state.__artists)&&state.__artists.length)return state.__artists;
   // Fresh multi-project row: fall back to every artist in the shared
-  // registry so the assignment dropdown isn't stuck on the two legacy
-  // hard-coded names. Once someone saves an explicit artist list (add or
-  // remove) it overrides this derived list.
+  // registry that's assigned to the current project (via userProjects).
+  // Previously returned every artist system-wide, which leaked sibling
+  // projects' artists into the assignment dropdown.
   if(typeof registry!=='undefined'&&registry&&registry.users){
+    const assigned=new Set(_projectArtistIds());
     const arr=Object.entries(registry.users)
-      .filter(([,u])=>u&&u.role==='artist')
+      .filter(([id,u])=>u&&u.role==='artist'&&assigned.has(id))
       .map(([id,u])=>({id,display:u.display||id}));
     if(arr.length)return arr;
   }
@@ -1954,15 +1955,35 @@ async function _analyticsFetchEvents(){
   });
   if(!r.ok)throw new Error("fetch task_events failed: "+await r.text());
   const all=await r.json();
-  // Isolate to the current project. Legacy events (logged before the
-  // multi-project migration stamped payload.project_id) only count for
-  // the main project — the same place they were originally generated.
+  // Isolate to the current project. Explicitly stamped events win; for
+  // legacy events (no payload.project_id) we attribute by shot_id: if
+  // the shot lives in the current project's task list, the event belongs
+  // here. Main keeps its historical catch-all role (pre-migration there
+  // was no other project).
   const pid=(typeof CURRENT_PROJECT_ID!=='undefined'&&CURRENT_PROJECT_ID)||LEGACY_PROJECT_ID;
+  const localShots=new Set((state.__tasks||[]).map(t=>t&&t.id).filter(Boolean));
   return all.filter(e=>{
     const ep=e&&e.payload&&e.payload.project_id;
-    if(pid===LEGACY_PROJECT_ID)return !ep||ep===LEGACY_PROJECT_ID;
-    return ep===pid;
+    if(ep)return ep===pid;
+    if(pid===LEGACY_PROJECT_ID)return true;
+    return localShots.has(e.shot_id);
   });
+}
+// Artists that are attached to the CURRENT project via the shared
+// registry.userProjects map. Replaces the hardcoded ["nikita","igor",
+// "katya","moon_carrots"] list that leaked every artist everywhere.
+function _projectArtistIds(){
+  const pid=(typeof CURRENT_PROJECT_ID!=='undefined'&&CURRENT_PROJECT_ID)||LEGACY_PROJECT_ID;
+  const users=(typeof registry!=='undefined'&&registry&&registry.users)||(typeof USERS!=='undefined'?USERS:{});
+  const assign=(typeof registry!=='undefined'&&registry&&registry.userProjects)||{};
+  const out=[];
+  for(const[id,u] of Object.entries(users||{})){
+    if(!u||u.role!=='artist')continue;
+    const a=assign[id];
+    if(Array.isArray(a)&&a.length){if(a.includes(pid))out.push(id);}
+    else if(pid===LEGACY_PROJECT_ID){out.push(id);}
+  }
+  return out;
 }
 
 function _analyticsGroupByShot(events){
@@ -2407,9 +2428,11 @@ function _runMonteCarlo(activeShots, eventsByShot, samples, iterations){
     const a=_shotAssignee(sid);
     if(a)artistSet.add(a);
   }
-  // Always include the canonical 4 from prod even if some have no shots assigned
-  const KNOWN_ARTISTS=["nikita","igor","katya","moon_carrots"];
-  for(const a of KNOWN_ARTISTS)artistSet.add(a);
+  // Include every artist registered to this project (via registry.userProjects)
+  // even if they have no shots assigned yet. Previously a hardcoded
+  // ["nikita","igor","katya","moon_carrots"] leaked prod artists into every
+  // newly-created project's analytics dashboard.
+  for(const a of _projectArtistIds())artistSet.add(a);
   const artistList=Array.from(artistSet);
 
   // Bail early if work distribution is empty (cannot forecast)
@@ -2462,18 +2485,21 @@ function _eventArtist(event){
 
 function _perArtistStats(events, cycles){
   // Identify REAL artists. Never include admin / client / guest / system.
-  // Prefer USERS[id].role==="artist" check; fall back to canonical 4.
+  // Gate by USERS[id].role + "assigned to the current project" so analytics
+  // doesn't pick up artists from a sibling project. Pre-seed with the
+  // project's registered artist list so someone who hasn't acted yet still
+  // appears as a zero-cycle row.
+  const projectArtists=new Set(_projectArtistIds());
   const isArtist=(id)=>{
     if(!id||id==="system"||id==="anon"||id==="backfill")return false;
-    if(typeof USERS!=="undefined"&&USERS[id]){
-      return USERS[id].role==="artist";
+    if(projectArtists.has(id))return true;
+    if(typeof USERS!=="undefined"&&USERS[id]&&USERS[id].role==="artist"){
+      return projectArtists.has(id);
     }
-    return ["nikita","igor","katya","moon_carrots"].includes(id);
+    return false;
   };
   const seen=new Set();
-  for(const id of["nikita","igor","katya","moon_carrots"]){
-    if(isArtist(id))seen.add(id);
-  }
+  for(const id of projectArtists){seen.add(id);}
   for(const e of events){
     const a=_eventArtist(e);
     if(a&&isArtist(a))seen.add(a);
