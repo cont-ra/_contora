@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0136</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0137</div>
 
 <script>
 const USERS = {
@@ -1344,6 +1344,12 @@ async function showLoggedIn(){
   const pulled=await _pullRemote();if(pulled){runMigrations();}
   // Refresh registry in case other users / project assignments changed
   try{await _pullRegistry();}catch(e){}
+  // Freshly-created projects don't have a __bot config yet (client chats,
+  // discovered TG users, topic names). Without it the player's "Push" and
+  // "Push to client" buttons stay hidden everywhere outside legacy "main".
+  // Pull the shared pieces off main once and merge them in so every new
+  // project inherits the bot wiring instead of silently degrading.
+  try{await _hydrateLegacyBotConfig();}catch(e){}
   document.querySelector("table").classList.toggle("hide-admin",!isAdmin());
   document.getElementById("adminGear").style.display=isAdmin()?'':'none';
   _loadColFilters();
@@ -1529,6 +1535,16 @@ function _handlePlayerDeepLink(){
 function logout(){_clearPersistedUser();currentUser=null;_pickedLoginId=null;document.getElementById("loginOverlay").classList.remove("hidden");document.getElementById("userBadge").style.display="none";document.getElementById("loginPass").value="";document.getElementById("loginError").textContent="";_renderLoginBox();render();}
 // Auto-login deferred until after SUPA_URL is defined (see below)
 
+// After multi-project migration linkTokens live in the shared registry.users,
+// and per-project state.__users is often empty. Every Telegram push flow
+// (player, shot row, version upload, bot ping) needs the token, so resolve
+// it once with a fallback to avoid the "Ask admin to regenerate" dead-end.
+function _currentUserLinkToken(){
+  if(!currentUser)return null;
+  return state?.__users?.[currentUser.id]?.linkToken
+      || registry?.users?.[currentUser.id]?.linkToken
+      || null;
+}
 function isAdmin(){return currentUser&&currentUser.role==="admin";}
 function isArtist(){return currentUser&&currentUser.role==="artist";}
 function isClient(){return currentUser&&currentUser.role==="client";}
@@ -4820,7 +4836,7 @@ async function _pushDownloadShareInternal(){
   const ids=window.__lastShareIds||[];
   const url=window.__lastShareUrl||'';
   if(!ids.length||!url)return;
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -4847,7 +4863,7 @@ async function _pushDownloadShareInternal(){
         fromUser,
         targetChatId:'__internal__',
         userId:currentUser.id,
-        linkToken:state.__users[currentUser.id].linkToken
+        linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -4865,7 +4881,7 @@ async function _pushDownloadShareToClient(){
   const ids=window.__lastShareIds||[];
   const url=window.__lastShareUrl||'';
   if(!ids.length||!url)return;
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -4897,7 +4913,7 @@ async function _pushDownloadShareToClient(){
         fromUser,
         targetChatId,
         userId:currentUser.id,
-        linkToken:state.__users[currentUser.id].linkToken
+        linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -4954,7 +4970,7 @@ async function _pingArtistFinalRequest(shotId){
   if(!shotId)return;
   const assignee=getAssignee(shotId);
   if(!assignee){alert('No artist assigned to '+shotId);return;}
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -4975,7 +4991,7 @@ async function _pingArtistFinalRequest(shotId){
         comment,
         fromUser,
         userId:currentUser.id,
-        linkToken:state.__users[currentUser.id].linkToken
+        linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -4992,7 +5008,7 @@ async function _pingArtistFinalRequest(shotId){
 // final-request to each artist with the full list of their shots.
 async function _pingArtistFinalRequestBatch(){
   if(!isAdmin())return;
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   // Filter selection to red shots (status=done AND no final file)
@@ -5032,7 +5048,7 @@ async function _pingArtistFinalRequestBatch(){
           comment,
           fromUser,
           userId:currentUser.id,
-          linkToken:state.__users[currentUser.id].linkToken
+          linkToken:_currentUserLinkToken()
         })
       });
       const data=await r.json().catch(()=>({}));
@@ -5454,6 +5470,28 @@ async function _pubHandleEntries(folder,entries){
   _pubRenderExisting(folder);
 }
 
+async function _hydrateLegacyBotConfig(){
+  // Copy the shared pieces of state.__bot from the legacy "main" row into
+  // every non-main project. Only fills in keys that are missing locally so
+  // we don't clobber project-specific tweaks (e.g. artistThreads). Writes
+  // the merged state back so subsequent opens don't refetch.
+  if(CURRENT_PROJECT_ID===LEGACY_PROJECT_ID)return;
+  const cur=state.__bot||{};
+  const need=!cur.clientChats||!cur.tgUsers||!cur.knownChats||!cur.topicNames||!cur.cooldowns;
+  if(!need)return;
+  try{
+    const r=await fetch(SUPA_URL+"/rest/v1/tracker_state?id=eq."+encodeURIComponent(LEGACY_PROJECT_ID)+"&select=data",{headers:{apikey:SUPA_KEY,Authorization:"Bearer "+SUPA_KEY}});
+    const rows=await r.json();
+    const mainBot=rows?.[0]?.data?.__bot;
+    if(!mainBot)return;
+    if(!state.__bot)state.__bot={};
+    let patched=false;
+    for(const k of ['tgUsers','knownChats','topicNames','clientChats','cooldowns']){
+      if(!state.__bot[k]&&mainBot[k]){state.__bot[k]=mainBot[k];patched=true;}
+    }
+    if(patched){try{saveState(state);}catch(e){}}
+  }catch(e){console.warn('legacy bot hydrate failed:',e);}
+}
 async function _hydrateLegacyPasswords(){
   // One-time pull of plainKey values from the legacy "main" row so admins
   // working in a freshly-created project can still see historical passwords.
@@ -6071,7 +6109,7 @@ function _saveBotSettings(){
   closeBotSettings();
 }
 async function _testBotPush(artistId){
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("No link token");return;
   }
   // Persist the currently selected dropdown value first so the worker
@@ -6089,7 +6127,7 @@ async function _testBotPush(artistId){
       body:JSON.stringify({
         shotId:'TEST',shotDesc:'Bot Settings test',artistId,
         kind:"test",fromUser:currentUser.display||currentUser.id,
-        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+        userId:currentUser.id,linkToken:_currentUserLinkToken()
       })
     });
     const d=await r.json();
@@ -7602,7 +7640,7 @@ async function pushChatNotification(){
   if(!_canPushChat(noteTaskId)){alert("No permission");return;}
   const assignee=getAssignee(noteTaskId);
   if(!assignee){alert("No artist assigned");return;}
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   // Global admin debounce against accidental double clicks
@@ -7670,7 +7708,7 @@ async function pushChatNotification(){
         frame:playerNote?.frame,
         versionIdx:playerNote?._versionIdx,
         tc:playerNote?.tc||null,
-        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+        userId:currentUser.id,linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -7743,7 +7781,7 @@ async function pushPlayerNotification(){
   if(!_canPushChat(_gifCurrentId)){alert("No permission");return;}
   const assignee=getAssignee(_gifCurrentId);
   if(!assignee){alert("No artist assigned");return;}
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -7775,7 +7813,7 @@ async function pushPlayerNotification(){
         shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,
         kind:"video",versionNumber,thumbUrl,
         comment,fromUser,link,
-        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+        userId:currentUser.id,linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -7828,7 +7866,7 @@ function _pickClientChat(){
 async function pushPlayerToClient(){
   if(!_gifCurrentId)return;
   if(!isAdmin()){alert("Admin only");return;}
-  if(!currentUser||!state.__users||!state.__users[currentUser.id]?.linkToken){
+  if(!currentUser||!state.__users||!_currentUserLinkToken()){
     alert("Your account has no link token. Ask admin to regenerate.");return;
   }
   if(Date.now()-_lastPushAt<_tgAdminDebounce())return;
@@ -7861,7 +7899,7 @@ async function pushPlayerToClient(){
         shotId:_gifCurrentId,shotDesc:desc,artistId:'',
         kind:"video",versionNumber,thumbUrl,
         comment,fromUser,link,targetChatId,
-        userId:currentUser.id,linkToken:state.__users[currentUser.id].linkToken
+        userId:currentUser.id,linkToken:_currentUserLinkToken()
       })
     });
     const data=await r.json().catch(()=>({}));
