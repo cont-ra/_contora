@@ -78,10 +78,13 @@ function _buildShotSummaryLines(stateData, ids) {
   return lines;
 }
 
-// Pulls the shared tracker_state once. Returned object can be used by both
-// _verifyUser and the artist→thread lookup so we don't double-fetch.
-async function _fetchState() {
-  const r = await fetch(SUPA_URL + '/rest/v1/tracker_state?id=eq.main&select=data', {
+// Pulls a tracker_state row by project id. Defaults to the legacy 'main'
+// row when no projectId is passed — keeps callers that don't yet know
+// about multi-project working against the original project.
+const LEGACY_STATE_ROW = 'main';
+async function _fetchState(projectId) {
+  const rowId = projectId || LEGACY_STATE_ROW;
+  const r = await fetch(SUPA_URL + '/rest/v1/tracker_state?id=eq.' + encodeURIComponent(rowId) + '&select=data', {
     headers: { apikey: SUPA_ANON_KEY, Authorization: 'Bearer ' + SUPA_ANON_KEY },
   });
   if (!r.ok) return null;
@@ -97,11 +100,13 @@ function _verifyUserFromState(data, userId, linkToken) {
 }
 
 // Persist mutated stateData back to Supabase. Best-effort, no locking
-// (matches the existing /tg/ping persistence pattern).
-async function _writeStateData(stateData) {
+// (matches the existing /tg/ping persistence pattern). rowId defaults to
+// the legacy 'main' row when caller doesn't pass a projectId.
+async function _writeStateData(stateData, projectId) {
   if (!stateData) return false;
+  const rowId = projectId || LEGACY_STATE_ROW;
   try {
-    const r = await fetch(SUPA_URL + '/rest/v1/tracker_state?id=eq.main', {
+    const r = await fetch(SUPA_URL + '/rest/v1/tracker_state?id=eq.' + encodeURIComponent(rowId), {
       method: 'PATCH',
       headers: {
         apikey: SUPA_ANON_KEY,
@@ -171,7 +176,7 @@ async function handleTgPush(request, env) {
   try { body = await request.json(); } catch (e) {
     return _jsonResp({ ok: false, error: 'bad_json' }, 400, origin);
   }
-  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber, targetChatId, frame, versionIdx, tc, files } = body || {};
+  const { shotId, shotDesc, artistId, text, fromUser, link, userId, linkToken, kind, kindLabel, comment, thumbUrl, versionNumber, targetChatId, frame, versionIdx, tc, files, projectId } = body || {};
   // shotId is required for everything except download-share pushes,
   // which can span multiple shots and live without a single anchor.
   if (kind !== 'download' && !shotId) {
@@ -181,12 +186,21 @@ async function handleTgPush(request, env) {
     return _jsonResp({ ok: false, error: 'missing_fields' }, 400, origin);
   }
 
-  // Pull shared state once for both user verification and thread lookup
+  // Pull shared state once for both user verification and thread lookup.
+  // Auth keeps reading the legacy 'main' row (users mirrored there across
+  // projects); project-scoped data (shares, __bot, shots) is read from
+  // projectStateData below.
   const stateData = await _fetchState();
   const user = _verifyUserFromState(stateData, userId, linkToken);
   if (!user) {
     return _jsonResp({ ok: false, error: 'auth_failed' }, 401, origin);
   }
+  // Resolve the project-scoped row. Falls back to the same `stateData`
+  // when no projectId was sent (legacy clients) or when it points at 'main'.
+  const _projectRowId = projectId || LEGACY_STATE_ROW;
+  const projectStateData = (_projectRowId === LEGACY_STATE_ROW)
+    ? stateData
+    : (await _fetchState(_projectRowId)) || stateData;
 
   // Permission rules:
   //  • Pushing to the default group: admin OR the artist assigned to the shot
@@ -211,8 +225,9 @@ async function handleTgPush(request, env) {
     if (!callerIsAdmin) {
       return _jsonResp({ ok: false, error: 'permission_denied' }, 403, origin);
     }
-    // Verify this chat is whitelisted as a client chat in the shared state
-    const allowed = ((stateData && stateData.__bot && stateData.__bot.clientChats) || []).map(String);
+    // Verify this chat is whitelisted as a client chat in the project's
+    // own Bot Settings (each project keeps its own client chat list).
+    const allowed = ((projectStateData && projectStateData.__bot && projectStateData.__bot.clientChats) || []).map(String);
     if (!allowed.includes(String(targetChatId))) {
       return _jsonResp({ ok: false, error: 'chat_not_allowed' }, 403, origin);
     }
@@ -233,8 +248,9 @@ async function handleTgPush(request, env) {
     // Internal test target: post to the General topic (no thread_id).
     threadId = null;
   } else if (!usingTargetChat) {
-    // Default group is a forum — every push must go into the artist's topic
-    threadId = _resolveThread(stateData, artistId);
+    // Default group is a forum — every push must go into the artist's topic.
+    // Thread map is per-project (Bot Settings is project-scoped).
+    threadId = _resolveThread(projectStateData, artistId);
     if (!threadId) {
       return _jsonResp({ ok: false, error: 'artist_no_topic' }, 400, origin);
     }
@@ -291,22 +307,22 @@ async function handleTgPush(request, env) {
     // only when a real client chat received it (internal test pushes don't
     // count toward delivery).
     if (dlToken) {
-      _ensureTrackingNode(stateData, dlToken);
-      if (stateData.__downloadShares && stateData.__downloadShares[dlToken]) {
-        const node = stateData.__downloadShares[dlToken];
+      _ensureTrackingNode(projectStateData, dlToken);
+      if (projectStateData.__downloadShares && projectStateData.__downloadShares[dlToken]) {
+        const node = projectStateData.__downloadShares[dlToken];
         if (!Array.isArray(node.pushedTo)) node.pushedTo = [];
         const target = internalTarget ? 'internal' : String(targetChatId);
         if (!node.pushedTo.includes(target)) node.pushedTo.push(target);
       }
-      await _writeStateData(stateData);
+      await _writeStateData(projectStateData, _projectRowId);
     }
     // Build per-shot summary lines straight from state for THIS share
     // token, regardless of what the client sent in `files`. Listing
     // individual filenames triggers Telegram auto-link, so we omit them
     // and only show <b>SHOT_FINAL</b> <i>N files · size</i> per shot.
-    const share = (stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
+    const share = (projectStateData.__downloadShares && projectStateData.__downloadShares[dlToken]) || null;
     const shareIds = (share && share.ids) || [];
-    const summaryLines = _buildShotSummaryLines(stateData, shareIds);
+    const summaryLines = _buildShotSummaryLines(projectStateData, shareIds);
     const safeComment = _escapeHtml((comment || '').slice(0, 500));
     // Header makes it clear to the client what they're looking at: the
     // material is the final, admin-approved cut.
@@ -911,14 +927,16 @@ async function handleTgTrack(request, env) {
   try { body = await request.json(); } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: 'bad_json' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
-  const { token, uid, event, file } = body || {};
+  const { token, uid, event, file, projectId } = body || {};
   if (!token || !event) {
     return new Response(JSON.stringify({ ok: false, error: 'missing_fields' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
   if (!/^[a-z0-9]{6,40}$/i.test(String(token))) {
     return new Response(JSON.stringify({ ok: false, error: 'bad_token' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
-  const stateData = await _fetchState();
+  // projectId is optional — old clients / legacy links fall back to 'main'.
+  const _rowId = projectId || LEGACY_STATE_ROW;
+  const stateData = await _fetchState(_rowId);
   if (!stateData) {
     return new Response(JSON.stringify({ ok: false, error: 'state_unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
@@ -962,7 +980,7 @@ async function handleTgTrack(request, env) {
   } else {
     return new Response(JSON.stringify({ ok: false, error: 'bad_event' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   }
-  await _writeStateData(stateData);
+  await _writeStateData(stateData, _rowId);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 }
 

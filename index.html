@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0141</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0142</div>
 
 <script>
 const USERS = {
@@ -4872,7 +4872,8 @@ function _shareDownloadLink(ids,title){
   if(!ids.length)return;
   const token=_createDownloadShare(ids);
   const prodBase=location.hostname.includes('localhost')?location.origin+location.pathname:'https://spark700.github.io/kh-vfx-tracker/';
-  const url=prodBase+'?download='+token;
+  const _pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
+  const url=prodBase+'?download='+token+'&project='+encodeURIComponent(_pid);
   const ov=document.createElement("div");
   ov.className="confirm-overlay";ov.id="dlShareOverlay";
   const list=ids.map(i=>'• '+esc(i)).join('<br>');
@@ -4920,7 +4921,7 @@ async function _pushDownloadShareInternal(){
         fromUser,
         targetChatId:'__internal__',
         userId:currentUser.id,
-        linkToken:_currentUserLinkToken()
+        linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -4970,7 +4971,7 @@ async function _pushDownloadShareToClient(){
         fromUser,
         targetChatId,
         userId:currentUser.id,
-        linkToken:_currentUserLinkToken()
+        linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -5048,7 +5049,7 @@ async function _pingArtistFinalRequest(shotId){
         comment,
         fromUser,
         userId:currentUser.id,
-        linkToken:_currentUserLinkToken()
+        linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -5105,7 +5106,7 @@ async function _pingArtistFinalRequestBatch(){
           comment,
           fromUser,
           userId:currentUser.id,
-          linkToken:_currentUserLinkToken()
+          linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
         })
       });
       const data=await r.json().catch(()=>({}));
@@ -5142,6 +5143,10 @@ function _checkPublicDownload(){
   const params=new URLSearchParams(window.location.search);
   const token=params.get('download');
   if(!token)return false;
+  // Pin guest session to the project the token was created in. Old links
+  // without ?project= keep working against the legacy 'main' row.
+  const pidFromUrl=params.get('project');
+  if(pidFromUrl){CURRENT_PROJECT_ID=pidFromUrl;}
   _pubDownloadMode=true;
   currentUser={id:"guest",display:"Guest",role:"guest"};
   // Force-hide everything (belt and braces — both inline and class)
@@ -5176,7 +5181,7 @@ function _pubTrack(event,file){
     fetch('https://killhouse-vfx.contora.workers.dev/tg/track',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({token:window.__pubDlToken,uid:window.__pubDlUid,event,file:file||''})
+      body:JSON.stringify({token:window.__pubDlToken,uid:window.__pubDlUid,event,file:file||'',projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID})
     }).catch(()=>{});
   }catch(e){}
 }
@@ -6193,7 +6198,7 @@ async function _testBotPush(artistId){
       body:JSON.stringify({
         shotId:'TEST',shotDesc:'Bot Settings test',artistId,
         kind:"test",fromUser:currentUser.display||currentUser.id,
-        userId:currentUser.id,linkToken:_currentUserLinkToken()
+        userId:currentUser.id,linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const d=await r.json();
@@ -7774,7 +7779,7 @@ async function pushChatNotification(){
         frame:playerNote?.frame,
         versionIdx:playerNote?._versionIdx,
         tc:playerNote?.tc||null,
-        userId:currentUser.id,linkToken:_currentUserLinkToken()
+        userId:currentUser.id,linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -7879,7 +7884,7 @@ async function pushPlayerNotification(){
         shotId:_gifCurrentId,shotDesc:desc,artistId:assignee,
         kind:"video",versionNumber,thumbUrl,
         comment,fromUser,link,
-        userId:currentUser.id,linkToken:_currentUserLinkToken()
+        userId:currentUser.id,linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
@@ -7965,7 +7970,7 @@ async function pushPlayerToClient(){
         shotId:_gifCurrentId,shotDesc:desc,artistId:'',
         kind:"video",versionNumber,thumbUrl,
         comment,fromUser,link,targetChatId,
-        userId:currentUser.id,linkToken:_currentUserLinkToken()
+        userId:currentUser.id,linkToken:_currentUserLinkToken(),projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID
       })
     });
     const data=await r.json().catch(()=>({}));
