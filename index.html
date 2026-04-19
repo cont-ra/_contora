@@ -1479,7 +1479,7 @@ function _renderProjectBadge(){
 
 async function _prefetchTgBotInfo(){
   try{
-    const r=await fetch('https://killhouse-vfx.contora.workers.dev/tg/ping',{method:'POST',headers:{'Content-Type':'application/json','Origin':location.origin}});
+    const r=await fetch('https://contora.net/tg/ping',{method:'POST',headers:{'Content-Type':'application/json','Origin':location.origin}});
     const d=await r.json();
     if(!d||!d.ok)return;
     if(!state.__bot)state.__bot={};
@@ -4292,7 +4292,7 @@ function _renderDoneShotsTracker(){
     // visitors should appear in the sidebar.
     const users=Object.entries(node.users||{}).filter(([k])=>k!=='_anon').map(([,v])=>v);
     const ids=share?.ids||[];
-    const url=`https://spark700.github.io/kh-vfx-tracker/?download=${tok}`;
+    const url=`https://contora.net/vfx-tracker/?download=${tok}`;
     const created=share?.created?new Date(share.created).toLocaleDateString():'—';
     html+=`<div class="dst-share" style="margin-bottom:18px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px">`;
     html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">`;
@@ -4819,7 +4819,7 @@ function _adminShareFolder(name){
     saveState(state);
     _renderShotFiles('__admin');
   }
-  const prodBase='https://spark700.github.io/kh-vfx-tracker/';
+  const prodBase='https://contora.net/vfx-tracker/';
   const url=prodBase+'?upload='+shareInfo.token;
   // Show share link overlay
   const ov=document.createElement("div");
@@ -4871,7 +4871,7 @@ function _shareDownloadLink(ids,title){
   if(!isAdmin())return;
   if(!ids.length)return;
   const token=_createDownloadShare(ids);
-  const prodBase=location.hostname.includes('localhost')?location.origin+location.pathname:'https://spark700.github.io/kh-vfx-tracker/';
+  const prodBase=location.hostname.includes('localhost')?location.origin+location.pathname:'https://contora.net/vfx-tracker/';
   const _pid=CURRENT_PROJECT_ID||LEGACY_PROJECT_ID;
   const url=prodBase+'?download='+token+'&project='+encodeURIComponent(_pid);
   const ov=document.createElement("div");
@@ -5178,7 +5178,7 @@ function _pubTrack(event,file){
   // a Telegram id there is nothing meaningful to record.
   if(!window.__pubDlToken||!window.__pubDlUid)return;
   try{
-    fetch('https://killhouse-vfx.contora.workers.dev/tg/track',{
+    fetch('https://contora.net/tg/track',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({token:window.__pubDlToken,uid:window.__pubDlUid,event,file:file||'',projectId:CURRENT_PROJECT_ID||LEGACY_PROJECT_ID})
@@ -5864,7 +5864,7 @@ function _openProjectColorPicker(pid,anchor){
 // (or any MCP client) can drive the tracker via the worker /mcp endpoint.
 // Tokens live in registry.mcpTokens[] and grant scoped project access.
 // ═══════════════════════════════════════════════════════════════════════
-const MCP_WORKER_URL='https://killhouse-vfx.contora.workers.dev/mcp';
+const MCP_WORKER_URL='https://contora.net/mcp';
 function _mcpGenerateToken(){
   const bytes=new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -6133,7 +6133,7 @@ async function _refreshBotStatus(){
   _botPingData=null;
   _renderBotSettings();
   try{
-    const r=await fetch('https://killhouse-vfx.contora.workers.dev/tg/ping',{method:'POST',headers:{'Content-Type':'application/json','Origin':location.origin}});
+    const r=await fetch('https://contora.net/tg/ping',{method:'POST',headers:{'Content-Type':'application/json','Origin':location.origin}});
     const d=await r.json();
     if(!d.ok)throw new Error(d.error||'unknown');
     _botPingData=d;
@@ -6192,7 +6192,7 @@ async function _testBotPush(artistId){
     if(!isNaN(v)&&v>0){cfg.artistThreads[artistId]=v;await new Promise(res=>{saveState(state);setTimeout(res,500);});}
   }
   try{
-    const r=await fetch('https://killhouse-vfx.contora.workers.dev/tg/push',{
+    const r=await fetch('https://contora.net/tg/push',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -6350,7 +6350,7 @@ function changeUserRole(id,role){
 function copyAuthLink(id){
   const lt=state.__users?.[id]?.linkToken||registry?.users?.[id]?.linkToken;
   if(!lt)return;
-  const base='https://killhouse-vfx.contora.workers.dev/';
+  const base='https://contora.net/vfx-tracker/';
   const payload=btoa(id+'::'+lt);
   const url=base+'?auth='+encodeURIComponent(payload);
   navigator.clipboard.writeText(url);
@@ -7644,7 +7644,7 @@ function chatToggleSelect(mid,el){
 }
 
 /* ── Telegram Push notification ── */
-const TG_PUSH_URL='https://killhouse-vfx.contora.workers.dev/tg/push';
+const TG_PUSH_URL='https://contora.net/tg/push';
 function _tgArtistCooldown(){return state.__bot?.cooldowns?.artistMs??60000;}
 function _tgAdminDebounce(){return state.__bot?.cooldowns?.adminMs??1000;}
 let _lastPushAt=0;                     // local timestamp of last successful push (admin debounce)
@@ -7761,8 +7761,8 @@ async function pushChatNotification(){
   const desc=getDesc(noteTaskId,(TASKS.find(t=>t.id===noteTaskId)?.desc)||"");
   const fromUser=currentUser.display||currentUser.id;
   const link=playerNote
-    ? `https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(noteTaskId)}&v=${playerNote._versionIdx}&f=${playerNote.frame||0}`
-    : `https://spark700.github.io/kh-vfx-tracker/?chat=${encodeURIComponent(noteTaskId)}`;
+    ? `https://contora.net/vfx-tracker/?player=${encodeURIComponent(noteTaskId)}&v=${playerNote._versionIdx}&f=${playerNote.frame||0}`
+    : `https://contora.net/vfx-tracker/?chat=${encodeURIComponent(noteTaskId)}`;
   const kindLabel=playerNote
     ? `player note (${playerNote._version||''})`
     : (isSelected?"selected message":"latest message");
@@ -7872,7 +7872,7 @@ async function pushPlayerNotification(){
   if(comment===null)return;
   const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
   const fromUser=currentUser.display||currentUser.id;
-  const link=`https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
+  const link=`https://contora.net/vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
   const btn=document.getElementById("playerPushBtn");
   const lbl=document.getElementById("playerPushLabel");
   if(btn)btn.disabled=true;if(lbl)lbl.textContent='Sending…';
@@ -7957,7 +7957,7 @@ async function pushPlayerToClient(){
   if(comment===null)return;
   const desc=getDesc(_gifCurrentId,(TASKS.find(t=>t.id===_gifCurrentId)?.desc)||"");
   const fromUser=currentUser.display||currentUser.id;
-  const link=`https://spark700.github.io/kh-vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
+  const link=`https://contora.net/vfx-tracker/?player=${encodeURIComponent(_gifCurrentId)}&v=${_gifVersionIdx}`;
   const cBtn=document.getElementById("playerPushClientBtn");
   const cLbl=document.getElementById("playerPushClientLabel");
   if(cBtn)cBtn.disabled=true;
@@ -10826,7 +10826,7 @@ async function _downloadAsZip(files,zipName){
   const {makeZip}=await import("https://cdn.jsdelivr.net/npm/client-zip/index.js");
   let done=0;
   const panel=_showOperationProgress('Downloading & zipping',files.length);
-  const WORKER='https://killhouse-vfx.contora.workers.dev/r2/';
+  const WORKER='https://contora.net/r2/';
   async function* generateFiles(){
     for(const f of files){
       const proxyUrl=f.url.startsWith(CDN_BASE)?WORKER+f.url.substring(CDN_BASE.length+1):f.url;
