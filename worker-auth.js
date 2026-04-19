@@ -575,48 +575,81 @@ async function _processTelegramUpdate(env, stateData, update, ctx) {
       }
     }
     // Download-share deep link: /start dl_<token>
+    //
+    // Multi-project note: shares are stored per-project in
+    // tracker_state.<projectId>.__downloadShares, so the webhook cannot
+    // assume main owns the token. We scan registry projects (plus main as
+    // fallback), locate the owner row, and persist tracking + reply URL
+    // scoped to that project. No mutation of `stateData` (main) happens
+    // for tokens owned by other projects — dirty stays false for main.
     if (m.text && m.text.indexOf('/start dl_') === 0 && m.from) {
       const dlToken = m.text.substring('/start dl_'.length).trim();
       if (dlToken && /^[a-z0-9]{6,40}$/i.test(dlToken)) {
-        const node = _ensureTrackingNode(stateData, dlToken);
-        const uid = String(m.from.id);
-        if (!node.users[uid]) {
-          node.users[uid] = {
-            id: m.from.id,
-            username: m.from.username || null,
-            first_name: m.from.first_name || null,
-            last_name: m.from.last_name || null,
-            visited_at: Date.now(),
-            files: {},
-          };
-        } else {
-          node.users[uid].username = m.from.username || node.users[uid].username;
-          node.users[uid].first_name = m.from.first_name || node.users[uid].first_name;
-          if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
+        // Build project list to scan. Always include main first (cheap —
+        // we already have its state loaded).
+        const reg = await _mcpFetchRow(MCP_REGISTRY_ROW_ID);
+        const regProjects = (reg && reg.data && Array.isArray(reg.data.projects)) ? reg.data.projects : [];
+        const scanPids = [LEGACY_STATE_ROW];
+        for (const p of regProjects) {
+          if (p && p.id && !scanPids.includes(p.id)) scanPids.push(p.id);
         }
-        dirty = true;
-        // Reply with per-shot summary + Open download page button.
-        // Per-shot only — listing individual filenames triggers Telegram's
-        // automatic URL linkification on anything that looks like a path.
-        try {
-          const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}&u=${encodeURIComponent(uid)}`;
-          const share = (stateData.__downloadShares && stateData.__downloadShares[dlToken]) || null;
-          const ids = (share && share.ids) || [];
-          const lines = _buildShotSummaryLines(stateData, ids);
-          const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
-          const replyText = header + (lines.length ? '\n\n' + lines.join('\n') : '');
-          await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: m.chat.id,
-              text: replyText,
-              parse_mode: 'HTML',
-              disable_web_page_preview: true,
-              reply_markup: { inline_keyboard: [[{ text: '⬇ Open download page', url: targetUrl }]] },
-            }),
-          });
-        } catch (e) { /* best-effort */ }
+        let ownerPid = null;
+        let ownerState = null;
+        for (const pid of scanPids) {
+          const ps = (pid === LEGACY_STATE_ROW) ? stateData : await _fetchState(pid);
+          if (ps && ps.__downloadShares && ps.__downloadShares[dlToken]) {
+            ownerPid = pid;
+            ownerState = ps;
+            break;
+          }
+        }
+        if (ownerPid && ownerState) {
+          const node = _ensureTrackingNode(ownerState, dlToken);
+          const uid = String(m.from.id);
+          if (!node.users[uid]) {
+            node.users[uid] = {
+              id: m.from.id,
+              username: m.from.username || null,
+              first_name: m.from.first_name || null,
+              last_name: m.from.last_name || null,
+              visited_at: Date.now(),
+              files: {},
+            };
+          } else {
+            node.users[uid].username = m.from.username || node.users[uid].username;
+            node.users[uid].first_name = m.from.first_name || node.users[uid].first_name;
+            if (!node.users[uid].visited_at) node.users[uid].visited_at = Date.now();
+          }
+          if (ownerPid === LEGACY_STATE_ROW) {
+            // Main row — let the outer webhook write it via dirty=true.
+            dirty = true;
+          } else {
+            // Project row — persist directly, outer writer only touches main.
+            await _writeStateData(ownerState, ownerPid);
+          }
+          // Reply with per-shot summary + Open download page button.
+          // URL carries &project= so the browser pulls the correct row.
+          try {
+            const pidParam = (ownerPid === LEGACY_STATE_ROW) ? '' : `&project=${encodeURIComponent(ownerPid)}`;
+            const targetUrl = `https://spark700.github.io/kh-vfx-tracker/?download=${encodeURIComponent(dlToken)}${pidParam}&u=${encodeURIComponent(uid)}`;
+            const share = ownerState.__downloadShares[dlToken];
+            const ids = (share && share.ids) || [];
+            const lines = _buildShotSummaryLines(ownerState, ids);
+            const header = `👋 Hi ${_escapeHtml(m.from.first_name || 'there')}!`;
+            const replyText = header + (lines.length ? '\n\n' + lines.join('\n') : '');
+            await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: m.chat.id,
+                text: replyText,
+                parse_mode: 'HTML',
+                disable_web_page_preview: true,
+                reply_markup: { inline_keyboard: [[{ text: '⬇ Open download page', url: targetUrl }]] },
+              }),
+            });
+          } catch (e) { /* best-effort */ }
+        }
       }
     }
   }
