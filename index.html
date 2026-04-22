@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0152</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0153</div>
 
 <script>
 const USERS = {
@@ -9007,17 +9007,34 @@ function _scheduleGifBackfillRender(){
     try{render();}catch(e){}
   },250);
 }
+// Per-project tracker for thumb probes so realtime-triggered pulls don't
+// keep firing new Image() requests for shots we already probed.  Reset
+// when the current project changes.
+const _GIF_PROBED=new Set();
+let _GIF_PROBED_PID=null;
 function _initGifs(){
-  GIFS.clear();
+  // Fresh project: clear everything so we don't leak the old project's ids
+  // into the new project's hasGif() lookups.
+  if(_GIF_PROBED_PID!==CURRENT_PROJECT_ID){
+    GIFS.clear();
+    _GIF_PROBED.clear();
+    _GIF_PROBED_PID=CURRENT_PROJECT_ID;
+  }
   for(const t of TASKS){
     if(state[t.id]?.files?.['source/preview']?.length)GIFS.add(t.id);
     else if(state[t.id]?.files?.['versions/preview']?.length)GIFS.add(t.id);
     else if(state[t.id]?.versions?.length)GIFS.add(t.id);
   }
-  // Legacy: check thumbs existence for shots without state entry.  One
-  // shared debounced render picks up every successful thumb load.
+  // Prune stale ids that are no longer in TASKS (e.g., shot deleted).
+  const taskIds=new Set(TASKS.map(t=>t.id));
+  for(const id of Array.from(GIFS)) if(!taskIds.has(id)) GIFS.delete(id);
+  // Legacy thumbnail probe: only for shots we haven't probed yet in this
+  // project.  Previously we re-sent every probe on every realtime-driven
+  // pull, which fired a debounced render after each success and made the
+  // previews reload a second (and third) time on init.
   for(const t of TASKS){
-    if(!GIFS.has(t.id)){
+    if(!GIFS.has(t.id) && !_GIF_PROBED.has(t.id)){
+      _GIF_PROBED.add(t.id);
       const img=new Image();img.src=CDN_BASE+'/'+projectPath('thumbs/'+t.id+'.jpg');
       img.onload=()=>{
         GIFS.add(t.id);
