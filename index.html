@@ -1176,7 +1176,9 @@ _pollFlags();
 //   decomposeProjectState("_registry", data) -> registry rows
 //   decomposeProjectState("<pid>", data)      -> project rows
 //
-// Every row has: { entity_type, entity_id, parent_id, payload }
+// Every row has: { entity_type, entity_id, parent_type, parent_id, payload }
+// parent_type+parent_id are paired: both null for root entities, both set for
+// children (enforced by the parent_pair_check constraint on the DB side).
 //
 // ID strategy (REFACTOR_PLAN §5, confirmed by user at Phase 0 Step 2 spec):
 //   - chat_msg : md5(shotId + "art_"+i+"_"+ts)  /  md5(shotId + "ply_"+i+"_"+ts)
@@ -1246,14 +1248,14 @@ function decomposeProject(projectId, data) {
     }
 
     if (key === "__tasks") {
-      rows.push({ entity_type: "task_order", entity_id: "__singleton", parent_id: null, payload: val });
+      rows.push({ entity_type: "task_order", entity_id: "__singleton", parent_type: null, parent_id: null, payload: val });
       continue;
     }
 
     if (SYSTEM_FANOUT_DICT_KEYS[key]) {
       const entityType = SYSTEM_FANOUT_DICT_KEYS[key];
       for (const subKey of Object.keys(val || {})) {
-        rows.push({ entity_type: entityType, entity_id: subKey, parent_id: null, payload: val[subKey] });
+        rows.push({ entity_type: entityType, entity_id: subKey, parent_type: null, parent_id: null, payload: val[subKey] });
       }
       continue;
     }
@@ -1266,7 +1268,7 @@ function decomposeProject(projectId, data) {
         rows.push({
           entity_type: "artist",
           entity_id:   id,
-          parent_id:   null,
+          parent_type: null, parent_id: null,
           payload:     { ...rest, _seq: i },
         });
       }
@@ -1274,13 +1276,13 @@ function decomposeProject(projectId, data) {
     }
 
     if (META_BLOB_KEYS.has(key)) {
-      rows.push({ entity_type: "meta", entity_id: key, parent_id: null, payload: val });
+      rows.push({ entity_type: "meta", entity_id: key, parent_type: null, parent_id: null, payload: val });
       continue;
     }
 
     if (key.startsWith("__")) {
       // Unknown/unplanned system key — preserve verbatim so round-trip holds.
-      rows.push({ entity_type: "meta", entity_id: key, parent_id: null, payload: val });
+      rows.push({ entity_type: "meta", entity_id: key, parent_type: null, parent_id: null, payload: val });
       continue;
     }
 
@@ -1305,7 +1307,7 @@ function decomposeShot(shotId, shotData) {
           rows.push({
             entity_type: "chat_msg",
             entity_id:   md5(shotId + "art_" + i + "_" + ts),
-            parent_id:   shotId,
+            parent_type: "shot", parent_id: shotId,
             payload:     { ...note, type: "artist", _seq: i },
           });
         }
@@ -1316,7 +1318,7 @@ function decomposeShot(shotId, shotData) {
           rows.push({
             entity_type: "chat_msg",
             entity_id:   md5(shotId + "ply_" + i + "_" + ts),
-            parent_id:   shotId,
+            parent_type: "shot", parent_id: shotId,
             payload:     { ...note, type: "player", _seq: i },
           });
         }
@@ -1327,7 +1329,7 @@ function decomposeShot(shotId, shotData) {
           rows.push({
             entity_type: "version",
             entity_id:   md5(shotId + "_v_" + i + "_" + ts),
-            parent_id:   shotId,
+            parent_type: "shot", parent_id: shotId,
             payload:     { ...v, _seq: i },
           });
         }
@@ -1339,7 +1341,7 @@ function decomposeShot(shotId, shotData) {
           rows.push({
             entity_type: "file_log",
             entity_id:   md5(shotId + "_fh_" + i + "_" + ts + "_" + file),
-            parent_id:   shotId,
+            parent_type: "shot", parent_id: shotId,
             payload:     { ...e, _seq: i },
           });
         }
@@ -1348,7 +1350,7 @@ function decomposeShot(shotId, shotData) {
           rows.push({
             entity_type: "drawing",
             entity_id:   "drawing_" + shotId + "_" + dkey,
-            parent_id:   shotId,
+            parent_type: "shot", parent_id: shotId,
             payload:     val[dkey],
           });
         }
@@ -1364,7 +1366,7 @@ function decomposeShot(shotId, shotData) {
     payload[key] = val;
   }
 
-  rows.push({ entity_type: "shot", entity_id: shotId, parent_id: null, payload });
+  rows.push({ entity_type: "shot", entity_id: shotId, parent_type: null, parent_id: null, payload });
   return rows;
 }
 
@@ -1378,19 +1380,19 @@ function decomposeRegistry(data) {
 
   // users is a dict {uid: {hash, display, role, ...}}.
   for (const uid of Object.keys(data.users || {})) {
-    rows.push({ entity_type: "user", entity_id: uid, parent_id: null, payload: data.users[uid] });
+    rows.push({ entity_type: "user", entity_id: uid, parent_type: null, parent_id: null, payload: data.users[uid] });
   }
 
   // artists is an array of {id, display, ...}; id becomes entity_id, the rest goes in payload.
   for (const a of (data.artists || [])) {
     const { id, ...rest } = a || {};
-    rows.push({ entity_type: "artist", entity_id: id, parent_id: null, payload: rest });
+    rows.push({ entity_type: "artist", entity_id: id, parent_type: null, parent_id: null, payload: rest });
   }
 
   // projects: [{id, name, color, ...}]
   for (const p of (data.projects || [])) {
     const { id, ...rest } = p || {};
-    rows.push({ entity_type: "project", entity_id: id, parent_id: null, payload: rest });
+    rows.push({ entity_type: "project", entity_id: id, parent_type: null, parent_id: null, payload: rest });
   }
 
   // userProjects: {uid: [pid, ...]}  -> one (uid:pid) row per link.
@@ -1400,7 +1402,7 @@ function decomposeRegistry(data) {
       rows.push({
         entity_type: "user_project",
         entity_id:   uid + ":" + pids[i],
-        parent_id:   null,
+        parent_type: null, parent_id: null,
         payload:     { user_id: uid, project_id: pids[i], _seq: i },
       });
     }
@@ -1409,7 +1411,7 @@ function decomposeRegistry(data) {
   // mcpTokens: [{name, token, projects, ...}].  The token string is the id.
   for (const t of (data.mcpTokens || [])) {
     const { token, ...rest } = t || {};
-    rows.push({ entity_type: "mcp_token", entity_id: token, parent_id: null, payload: rest });
+    rows.push({ entity_type: "mcp_token", entity_id: token, parent_type: null, parent_id: null, payload: rest });
   }
 
   // __version dropped, nothing else in registry today.
@@ -4298,9 +4300,10 @@ async function _pushRemote(s){
             project_id:  peProjectId,
             entity_type: e.entity_type,
             entity_id:   e.entity_id,
+            parent_type: e.parent_type,   // null for roots; 'shot' for chat_msg/drawing/version/file_log
             parent_id:   e.parent_id,
             payload:     e.payload,
-            version_in:  null,   // upsert-style; RPC checks current version
+            version_in:  null,            // upsert-style; RPC checks current version
             session_id:  SESSION_ID,
             user_id:     (currentUser && currentUser.id) || 'anon',
           };
