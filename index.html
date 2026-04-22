@@ -1113,7 +1113,7 @@
 </table>
 <div class="save-notice" id="saveNotice">Saved</div>
 <div id="updateBanner" class="update-banner hidden"><span id="updateBannerText"></span><button id="updateBannerNow">Reload now</button><button id="updateBannerCancel">Later</button></div>
-<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0153</div>
+<div id="appVersion" style="position:fixed;bottom:8px;right:12px;font-size:11px;color:#30363d;font-family:'SF Mono',monospace;pointer-events:none">v1.0.0154</div>
 
 <script>
 const USERS = {
@@ -4689,6 +4689,10 @@ function _initRealtime(){
       if(typeof _onRegistryChanged==='function')_onRegistryChanged();
     },120);
   };
+  // Suppress worker-originated echoes for the first few seconds: /tg/ping
+  // at startup rewrites meta/__bot server-side, whose only visible effect
+  // is tgUsers cache — nothing the shot table needs to re-render for.
+  const _initEchoSuppressUntil=Date.now()+5000;
   ws.onmessage=(ev)=>{
     try{
       const msg=JSON.parse(ev.data);
@@ -4696,6 +4700,10 @@ function _initRealtime(){
       const record=msg.payload.data.record;
       // Echo suppression: skip events that carry our own SESSION_ID.
       if(record.session_id && record.session_id===SESSION_ID) return;
+      // Init-window worker echoes (handleTgPing write-back) -> skip.
+      if(record.session_id && typeof record.session_id==='string'
+         && record.session_id.indexOf('worker-')===0
+         && Date.now()<_initEchoSuppressUntil) return;
       const pid=record.project_id;
       if(pid==='_registry'){ _schedRegistryPull(); return; }
       const activePid=(CURRENT_PROJECT_ID||LEGACY_PROJECT_ID);
